@@ -1,0 +1,10 @@
+# Enable rewrite engine
+RewriteEngine On
+
+# Allow install.php in root
+RewriteCond %{REQUEST_URI} ^/install\.php$
+RewriteRule ^ - [L]
+
+# Redirect all other requests to public/ directory
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]

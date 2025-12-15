@@ -1,0 +1,118 @@
+{% extends "layouts/base.twig" %}
+
+{% block title %}Анализ звонков - Call Audit Proto{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto" x-data="uploadForm()">
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <div class="text-center mb-8">
+            <h2 class="text-3xl font-bold text-gray-900 mb-2">📞 Анализ звонка</h2>
+            <p class="text-gray-600">Загрузите аудио для автоматического анализа</p>
+        </div>
+
+        <form method="POST" action="/jobs" enctype="multipart/form-data" @submit="handleSubmit">
+            <!-- Audio File -->
+            <div class="mb-8">
+                <label for="audio" class="block text-base font-semibold text-gray-700 mb-3">
+                    Аудиофайл
+                </label>
+                <div class="relative">
+                    <input 
+                        type="file" 
+                        id="audio" 
+                        name="audio" 
+                        accept=".mp3,.wav"
+                        required
+                        class="block w-full text-sm text-gray-900 border-2 border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 p-3 hover:border-blue-400 transition"
+                        @change="audioFile = $event.target.files[0]?.name"
+                    >
+                </div>
+                <p class="mt-2 text-sm text-gray-500">Поддерживаются форматы: MP3, WAV (до 50MB)</p>
+                <p class="mt-2 text-sm font-medium text-blue-600" x-show="audioFile" x-text="'✓ Выбран: ' + audioFile"></p>
+            </div>
+
+            <!-- Hidden fields -->
+            <input type="hidden" name="lang" value="auto">
+
+            <!-- Submit Button -->
+            <div class="mt-8">
+                <button 
+                    type="submit" 
+                    :disabled="submitting || !audioFile"
+                    class="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-lg font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+                >
+                    <span x-show="!submitting">🚀 Анализировать</span>
+                    <span x-show="submitting" x-cloak class="flex items-center justify-center">
+                        <svg class="animate-spin h-6 w-6 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Обработка... Пожалуйста, подождите</span>
+                    </span>
+                </button>
+            </div>
+        </form>
+
+        <!-- Loading Overlay -->
+        <div x-show="submitting" x-cloak class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+                <svg class="animate-spin h-16 w-16 mx-auto mb-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Анализируем звонок...</h3>
+                <p class="text-gray-600 mb-4">Это может занять несколько минут</p>
+                <div class="space-y-2 text-sm text-gray-500 text-left">
+                    <div class="flex items-center">
+                        <span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+                        Транскрибируем аудио
+                    </div>
+                    <div class="flex items-center">
+                        <span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse delay-75"></span>
+                        Анализируем метрики
+                    </div>
+                    <div class="flex items-center">
+                        <span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse delay-150"></span>
+                        Проверяем триггеры
+                    </div>
+                    <div class="flex items-center">
+                        <span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse delay-300"></span>
+                        Оцениваем по критериям
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info -->
+    <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-blue-900 mb-2">ℹ️ Что анализируется:</h3>
+        <ul class="text-sm text-blue-800 space-y-1">
+            <li>• Транскрипция и таймкоды</li>
+            <li>• Оценка по критериям качества</li>
+            <li>• Триггеры и нарушения</li>
+            <li>• Аудио-метрики и эмоции</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function uploadForm() {
+    return {
+        audioFile: '',
+        submitting: false,
+        handleSubmit(e) {
+            if (!this.audioFile) {
+                e.preventDefault();
+                alert('Пожалуйста, выберите аудиофайл');
+                return;
+            }
+            this.submitting = true;
+            console.log('Starting analysis for:', this.audioFile);
+        }
+    }
+}
+</script>
+{% endblock %}
