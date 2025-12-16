@@ -9,6 +9,8 @@ class AppViewModel: ObservableObject {
     @Published var isSettingsPresented = false
     @Published var errorMessage: String?
     @Published var showError = false
+    @Published var draftTitle: String = ""
+    @Published var draftCategory: SessionCategory = .personal
     
     // Dependencies
     private let persistence = PersistenceService.shared
@@ -48,9 +50,15 @@ class AppViewModel: ObservableObject {
                 duration: result.duration,
                 audioFilename: result.filename,
                 transcript: nil,
-                analysis: nil
+                analysis: nil,
+                isProcessing: false,
+                category: draftCategory,
+                customTitle: draftTitle.isEmpty ? nil : draftTitle
             )
             persistence.saveSession(newSession)
+            // reset drafts
+            draftTitle = ""
+            draftCategory = .personal
             
             // Auto-process if key exists? Maybe optional.
             // For now, user manually triggers or we trigger if key is present.

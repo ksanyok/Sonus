@@ -1,8 +1,16 @@
 import SwiftUI
 import AppKit
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
+    weak var viewModel: AppViewModel?
+    private var statusItem: NSStatusItem?
+    
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        setupStatusBar()
         GlobalHotKeyService.shared.register()
         GlobalHotKeyService.shared.onHotKeyTriggered = { [weak self] in
             self?.toggleMiniWindow()
@@ -22,6 +30,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+
+    private func setupStatusBar() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem?.button {
+            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
+        }
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Open Sonus", action: #selector(openMainWindow), keyEquivalent: "")
+        menu.addItem(withTitle: "Toggle Recording", action: #selector(toggleRecording), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q")
+        statusItem?.menu = menu
+    }
+    
+    @objc private func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+    
+    @objc private func toggleRecording() {
+        guard let viewModel else { return }
+        if viewModel.audioRecorder.isRecording {
+            viewModel.stopRecording()
+        } else {
+            viewModel.startRecording()
+        }
+    }
+    
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
 }
 
 @main
@@ -33,6 +74,9 @@ struct SonusApp: App {
     var body: some Scene {
         WindowGroup("Sonus", id: "main") {
             MainWindow(viewModel: viewModel)
+                .onAppear {
+                    appDelegate.viewModel = viewModel
+                }
         }
         .commands {
             CommandMenu("Recording") {
@@ -53,7 +97,7 @@ struct SonusApp: App {
         }
         
         Window("Mini Recorder", id: "mini") {
-            MiniWindow(viewModel: viewModel)
+            MiniWindow(viewModel: viewModel, recorder: viewModel.audioRecorder)
                 .onAppear {
                     // Hack to make window always on top and transparent title bar
                     for window in NSApplication.shared.windows {

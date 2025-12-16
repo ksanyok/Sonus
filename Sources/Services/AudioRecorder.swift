@@ -71,21 +71,25 @@ class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // Update UI more frequently for smoother animation (approx 60 FPS)
+        timer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
             guard let self = self, let recorder = self.audioRecorder else { return }
             
             recorder.updateMeters()
-            self.recordingDuration = recorder.currentTime
-            
-            // Update levels for visualization
+            let currentTime = recorder.currentTime
             let level = recorder.averagePower(forChannel: 0)
-            // Normalize -160..0 to 0..1
-            let normalizedLevel = max(0, (level + 50) / 50) 
+            let normalizedLevel = max(0, (level + 60) / 60) // Normalize -160..0 to 0..1 with boost
             
             DispatchQueue.main.async {
-                self.audioLevels.removeFirst()
+                self.recordingDuration = currentTime
+                if self.audioLevels.count >= 30 {
+                    self.audioLevels.removeFirst()
+                }
                 self.audioLevels.append(normalizedLevel)
             }
+        }
+        if let timer = timer {
+            RunLoop.main.add(timer, forMode: .common)
         }
     }
     

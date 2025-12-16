@@ -2,15 +2,16 @@ import SwiftUI
 
 struct MiniWindow: View {
     @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var recorder: AudioRecorder
     
     var body: some View {
         VStack(spacing: 12) {
-            if viewModel.audioRecorder.isRecording {
-                Text(formatDuration(viewModel.audioRecorder.recordingDuration))
+            if recorder.isRecording {
+                Text(formatDuration(recorder.recordingDuration))
                     .font(.system(size: 24, weight: .bold, design: .monospaced))
                     .contentTransition(.numericText())
                 
-                VisualizerView(levels: viewModel.audioRecorder.audioLevels)
+                VisualizerView(levels: recorder.audioLevels)
                     .frame(height: 30)
                 
                 Button(action: viewModel.stopRecording) {

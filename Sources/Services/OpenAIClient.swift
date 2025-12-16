@@ -83,6 +83,10 @@ class OpenAIClient {
         - nextSteps: A list of actionable next steps.
         - recommendations: Recommendations for the salesperson on how to improve or what to say next.
         - customerIntent: The customer's intent (e.g., "Buying", "Browsing", "Not Interested"). Determine if they are genuinely interested or just agreeing politely.
+        - criteria: An array of evaluation criteria. Each object should have:
+            - name: Name of the criterion (e.g., "Greeting", "Needs Analysis", "Closing").
+            - score: Score from 0 to 10.
+            - comment: A brief comment explaining the score.
         
         Transcript:
         \(text)
