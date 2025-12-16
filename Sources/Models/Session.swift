@@ -63,22 +63,64 @@ enum SessionCategory: String, Codable, CaseIterable, Identifiable {
 }
 
 struct Analysis: Codable, Equatable, Hashable {
-    let summary: String
-    let sentiment: String // "Positive", "Neutral", "Negative"
-    let score: Int // 0-100
-    let participants: [String]
-    let languages: [String]
+    var summary: String
+    var sentiment: String // "Positive", "Neutral", "Negative"
+    var score: Int // 0-100
+    var participants: [String]
+    var languages: [String]
     
     // New fields for sales analysis
-    let engagementScore: Int // 0-100
-    let salesProbability: Int // 0-100
-    let objections: [String]
-    let nextSteps: [String]
-    let recommendations: [String]
-    let customerIntent: String // "Buying", "Browsing", "Not Interested"
+    var engagementScore: Int // 0-100
+    var salesProbability: Int // 0-100
+    var objections: [String]
+    var nextSteps: [String]
+    var recommendations: [String]
+    var customerIntent: String // "Buying", "Browsing", "Not Interested"
     
-        // Detailed criteria (optional for backward compatibility)
-        var criteria: [EvaluationCriterion] = []
+    // Detailed criteria (optional for backward compatibility)
+    var criteria: [EvaluationCriterion] = []
+    
+    init(summary: String,
+         sentiment: String,
+         score: Int,
+         participants: [String],
+         languages: [String],
+         engagementScore: Int,
+         salesProbability: Int,
+         objections: [String],
+         nextSteps: [String],
+         recommendations: [String],
+         customerIntent: String,
+         criteria: [EvaluationCriterion] = []) {
+        self.summary = summary
+        self.sentiment = sentiment
+        self.score = score
+        self.participants = participants
+        self.languages = languages
+        self.engagementScore = engagementScore
+        self.salesProbability = salesProbability
+        self.objections = objections
+        self.nextSteps = nextSteps
+        self.recommendations = recommendations
+        self.customerIntent = customerIntent
+        self.criteria = criteria
+    }
+    
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        summary = (try? c.decode(String.self, forKey: .summary)) ?? ""
+        sentiment = (try? c.decode(String.self, forKey: .sentiment)) ?? "Neutral"
+        score = (try? c.decode(Int.self, forKey: .score)) ?? 0
+        participants = (try? c.decode([String].self, forKey: .participants)) ?? []
+        languages = (try? c.decode([String].self, forKey: .languages)) ?? []
+        engagementScore = (try? c.decode(Int.self, forKey: .engagementScore)) ?? 0
+        salesProbability = (try? c.decode(Int.self, forKey: .salesProbability)) ?? 0
+        objections = (try? c.decode([String].self, forKey: .objections)) ?? []
+        nextSteps = (try? c.decode([String].self, forKey: .nextSteps)) ?? []
+        recommendations = (try? c.decode([String].self, forKey: .recommendations)) ?? []
+        customerIntent = (try? c.decode(String.self, forKey: .customerIntent)) ?? ""
+        criteria = (try? c.decode([EvaluationCriterion].self, forKey: .criteria)) ?? []
+    }
 }
 
 struct EvaluationCriterion: Codable, Equatable, Hashable, Identifiable {

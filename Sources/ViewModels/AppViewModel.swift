@@ -74,6 +74,10 @@ class AppViewModel: ObservableObject {
         }
         persistence.deleteSession(session)
     }
+
+    func saveSession(_ session: Session) {
+        persistence.saveSession(session)
+    }
     
     func deleteSessions(at offsets: IndexSet) {
         // Check if selected session is being deleted

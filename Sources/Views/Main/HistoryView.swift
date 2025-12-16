@@ -3,6 +3,8 @@ import SwiftUI
 struct HistoryView: View {
     @ObservedObject var viewModel: AppViewModel
     @State private var selectedCategory: SessionCategory? = nil // nil means "All"
+    @State private var showEditSheet: Bool = false
+    @State private var editingSession: Session?
     
     var filteredSessions: [Session] {
         if let category = selectedCategory {
@@ -36,7 +38,14 @@ struct HistoryView: View {
                 LazyVStack(spacing: 16) {
                     ForEach(filteredSessions) { session in
                         NavigationLink(value: session) {
-                            SessionCard(session: session)
+                            SessionCard(session: session, onAnalyze: {
+                                viewModel.processSession(session)
+                            }, onDelete: {
+                                viewModel.deleteSession(session)
+                            }, onEdit: {
+                                editingSession = session
+                                showEditSheet = true
+                            })
                         }
                         .buttonStyle(.plain)
                     }
@@ -46,6 +55,11 @@ struct HistoryView: View {
         }
         .navigationTitle("История")
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $showEditSheet) {
+            if let session = editingSession {
+                SessionEditSheet(session: session, viewModel: viewModel, isPresented: $showEditSheet)
+            }
+        }
     }
 }
 
@@ -77,6 +91,9 @@ struct CategoryPill: View {
 
 struct SessionCard: View {
     let session: Session
+    let onAnalyze: () -> Void
+    let onDelete: () -> Void
+    let onEdit: () -> Void
     @State private var isHovering = false
     
     var body: some View {
@@ -108,28 +125,41 @@ struct SessionCard: View {
             
             Spacer()
             
-            if let analysis = session.analysis {
-                VStack(alignment: .trailing) {
-                    Text("\(analysis.score)%")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(scoreColor(analysis.score))
-                    
-                    Text(analysis.sentiment)
-                        .font(.caption2)
+            VStack(alignment: .trailing, spacing: 6) {
+                if let analysis = session.analysis {
+                    VStack(alignment: .trailing) {
+                        Text("\(analysis.score)%")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(scoreColor(analysis.score))
+                        
+                        Text(analysis.sentiment)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(scoreColor(analysis.score).opacity(0.1))
+                    .cornerRadius(8)
+                } else {
+                    Text(session.isProcessing ? "Processing..." : "Not analyzed")
+                        .font(.caption)
                         .foregroundColor(.secondary)
+                        .padding(6)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(6)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(scoreColor(analysis.score).opacity(0.1))
-                .cornerRadius(8)
-            } else {
-                Text("Processing...")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(6)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(6)
+                HStack(spacing: 8) {
+                    Button("Analyze") { onAnalyze() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    Button("Edit") { onEdit() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    Button(role: .destructive) { onDelete() } label: { Text("Delete") }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
             
             Image(systemName: "chevron.right")
@@ -159,5 +189,54 @@ struct SessionCard: View {
         case 50..<75: return .orange
         default: return .green
         }
+    }
+}
+
+struct SessionEditSheet: View {
+    let session: Session
+    @ObservedObject var viewModel: AppViewModel
+    @Binding var isPresented: Bool
+    @State private var title: String = ""
+    @State private var category: SessionCategory = .personal
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Редактировать запись")
+                .font(.title2)
+                .bold()
+            TextField("Название", text: $title)
+                .textFieldStyle(.roundedBorder)
+            Picker("Категория", selection: $category) {
+                ForEach(SessionCategory.allCases) { cat in
+                    HStack {
+                        Image(systemName: cat.icon)
+                        Text(cat.displayName)
+                    }.tag(cat)
+                }
+            }
+            .pickerStyle(.menu)
+            HStack {
+                Spacer()
+                Button("Сохранить") {
+                    save()
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Отмена") { isPresented = false }
+            }
+        }
+        .padding()
+        .frame(width: 360)
+        .onAppear {
+            title = session.customTitle ?? session.title
+            category = session.category
+        }
+    }
+    
+    private func save() {
+        var updated = session
+        updated.customTitle = title.isEmpty ? nil : title
+        updated.category = category
+        viewModel.saveSession(updated)
+        isPresented = false
     }
 }

@@ -122,7 +122,12 @@ class OpenAIClient {
             throw OpenAIError.noData
         }
         
-        return try JSONDecoder().decode(Analysis.self, from: data)
+        do {
+            return try JSONDecoder().decode(Analysis.self, from: data)
+        } catch {
+            let bodyString = String(data: data, encoding: .utf8) ?? "<no-body>"
+            throw OpenAIError.decodingError(NSError(domain: "OpenAIClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Decode failed: \(error.localizedDescription). Body: \(bodyString)"]))
+        }
     }
     
     private func createMultipartBody(audioURL: URL, boundary: String) throws -> Data {

@@ -7,6 +7,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // If another instance is already running, quit this one to avoid duplicates
+        if let bundleID = Bundle.main.bundleIdentifier,
+           NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).count > 1 {
+            NSApp.terminate(nil)
+            return
+        }
+
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 

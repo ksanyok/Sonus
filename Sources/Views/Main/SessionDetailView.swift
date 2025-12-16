@@ -9,31 +9,38 @@ struct SessionDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(session.title)
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
-                    HStack {
-                        Image(systemName: session.category.icon)
-                        Text(session.category.displayName)
+                    HStack(spacing: 8) {
+                        Label(session.category.displayName, systemImage: session.category.icon)
                         Text("•")
                         Text(session.date.formatted(date: .long, time: .shortened))
+                        Text("•")
+                        Text(formatDuration(session.duration))
                     }
                     .foregroundColor(.secondary)
                 }
-                
                 Spacer()
-                
-                if session.isProcessing {
-                    ProgressView("Processing...")
-                        .controlSize(.small)
-                } else if session.analysis == nil {
-                    Button("Analyze") {
-                        viewModel.processSession(session)
+                VStack(alignment: .trailing, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Button("Analyze") {
+                            viewModel.processSession(session)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(session.isProcessing)
+                        Button("Delete", role: .destructive) {
+                            viewModel.deleteSession(session)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.borderedProminent)
+                    if session.isProcessing {
+                        ProgressView("Processing...")
+                            .controlSize(.small)
+                    }
                 }
             }
             .padding()

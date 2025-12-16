@@ -14,9 +14,13 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section(header: Text("Permissions")) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("Settings")
+                    .font(.largeTitle).bold()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Permissions").font(.headline)
                     HStack {
                         Text("Microphone Access")
                         Spacer()
@@ -39,17 +43,24 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
                 
-                Section(header: Text("OpenAI Configuration")) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("OpenAI Configuration").font(.headline)
                     SecureField("API Key", text: $apiKey)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                    
                     Text("Your API key is stored locally.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-
-                Section(header: Text("Hotkey")) {
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Hotkey").font(.headline)
                     HStack {
                         Text("Key")
                         Spacer()
@@ -57,39 +68,45 @@ struct SettingsView: View {
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .frame(width: 140)
                     }
-                    Toggle("Command", isOn: $useCommand)
-                    Toggle("Shift", isOn: $useShift)
-                    Toggle("Option", isOn: $useOption)
-                    Toggle("Control", isOn: $useControl)
+                    HStack {
+                        Toggle("Command", isOn: $useCommand)
+                        Toggle("Shift", isOn: $useShift)
+                    }
+                    HStack {
+                        Toggle("Option", isOn: $useOption)
+                        Toggle("Control", isOn: $useControl)
+                    }
                     Text("Use single key name like 'Space' or 'A'.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
                 
                 HStack {
                     Spacer()
-                    Button("Save") {
-                        saveSettings()
+                    Button("Save") { saveSettings() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                }
+                
+                if showSaveSuccess {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Settings saved successfully")
                     }
-                    .keyboardShortcut(.defaultAction)
+                    .padding()
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(10)
+                    .transition(.move(edge: .bottom))
                 }
             }
-            .padding()
-            .frame(maxWidth: 520, alignment: .leading)
-
-            if showSaveSuccess {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("Settings saved successfully")
-                }
-                .padding()
-                .background(Color.green.opacity(0.1))
-                .transition(.move(edge: .bottom))
-            }
+            .frame(maxWidth: 720)
+            .padding(24)
         }
-        .frame(minWidth: 450, minHeight: 300)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(minWidth: 600, minHeight: 420)
         .onAppear {
             loadSettings()
             checkMicPermission()
