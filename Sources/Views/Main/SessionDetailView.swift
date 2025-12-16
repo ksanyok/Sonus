@@ -6,8 +6,6 @@ struct SessionDetailView: View {
     @ObservedObject var viewModel: AppViewModel
     @EnvironmentObject private var l10n: LocalizationService
     @StateObject private var audioPlayer = AudioPlayer()
-    @State private var selectedTab = 0
-
     private var session: Session? {
         viewModel.sessions.first(where: { $0.id == sessionID })
     }
@@ -18,167 +16,107 @@ struct SessionDetailView: View {
         return v < OpenAIClient.analysisSchemaVersion
     }
 
-    private func seekInAudio(_ seconds: TimeInterval) {
-        guard let session else { return }
-        let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
-        // If player hasn't been initialized yet, start playback first so seek works.
-        if audioPlayer.duration <= 0 {
-            audioPlayer.startPlayback(audioURL: url)
-        }
-        audioPlayer.seek(to: seconds)
+    func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
-    
+
     var body: some View {
         Group {
             if let session {
-                VStack(spacing: 0) {
-                    // Header
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if let customTitle = session.customTitle, !customTitle.isEmpty {
-                                Text(customTitle)
-                                    .font(.largeTitle).bold()
-                            } else {
-                                Text(session.date, format: .dateTime.year().month().day().hour().minute())
-                                    .font(.largeTitle).bold()
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let customTitle = session.customTitle, !customTitle.isEmpty {
+                                    Text(customTitle)
+                                        .font(.largeTitle).bold()
+                                } else {
+                                    Text(session.date, format: .dateTime.year().month().day().hour().minute())
+                                        .font(.largeTitle).bold()
+                                }
+                                HStack(spacing: 8) {
+                                    Label(l10n.t(session.category.displayNameEn, ru: session.category.displayNameRu), systemImage: session.category.icon)
+                                    Text("•")
+                                    Text(session.date, format: .dateTime.year().month().day().hour().minute())
+                                    Text("•")
+                                    Text(formatDuration(session.duration))
+                                }
+                                .foregroundColor(.secondary)
                             }
-                            HStack(spacing: 8) {
-                                Label(l10n.t(session.category.displayNameEn, ru: session.category.displayNameRu), systemImage: session.category.icon)
-                                Text("•")
-                                Text(session.date, format: .dateTime.year().month().day().hour().minute())
-                                Text("•")
-                                Text(formatDuration(session.duration))
-                            }
-                            .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 10) {
-                            HStack(spacing: 10) {
-                                AnalyzeActionButton(
-                                    isProcessing: session.isProcessing,
-                                    lastAnalyzedAt: session.analysisUpdatedAt,
-                                    needsUpdate: needsAnalysisUpdate(session),
-                                    onAnalyze: { viewModel.processSession(session) }
-                                )
-                                Button(l10n.t("Delete", ru: "Удалить"), role: .destructive) { viewModel.deleteSession(session) }
-                                    .buttonStyle(.bordered)
-                            }
-                            if session.isProcessing {
-                                VStack(alignment: .trailing, spacing: 6) {
-                                    Text(viewModel.processingStatus[session.id] ?? l10n.t("Processing…", ru: "Обработка…"))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    if let p = viewModel.processingProgress[session.id] {
-                                        ProgressView(value: p)
-                                            .frame(width: 220)
-                                            .controlSize(.small)
-                                    } else {
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 10) {
+                                HStack(spacing: 10) {
+                                    AnalyzeActionButton(
+                                        isProcessing: session.isProcessing,
+                                        lastAnalyzedAt: session.analysisUpdatedAt,
+                                        needsUpdate: needsAnalysisUpdate(session),
+                                        onAnalyze: { viewModel.processSession(session) }
+                                    )
+                                    Button(l10n.t("Delete", ru: "Удалить"), role: .destructive) { viewModel.deleteSession(session) }
+                                        .buttonStyle(.bordered)
+                                }
+                                if session.isProcessing {
+                                    VStack(alignment: .trailing, spacing: 6) {
+                                        Text(viewModel.processingStatus[session.id] ?? l10n.t("Processing…", ru: "Обработка…"))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                         ProgressView()
                                             .controlSize(.small)
                                     }
                                 }
                             }
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 16)
+
+                        // Unified Player
+                        UnifiedPlayerView(audioPlayer: audioPlayer, session: session, analysis: session.analysis)
+                            .padding(.horizontal)
+
+                        if let analysis = session.analysis {
+                            // Overview
+                            OverviewGrid(analysis: analysis)
+                                .padding(.horizontal)
+
+                            // Detailed Analysis
+                            DisclosureGroup(
+                                content: { DetailedAnalysisView(analysis: analysis).padding(.top) },
+                                label: { Text(l10n.t("Detailed Analysis", ru: "Подробный анализ")).font(.title2).bold() }
+                            )
+                            .padding(.horizontal)
+
+                            // Reminders
+                            DisclosureGroup(
+                                content: { RemindersView(analysis: analysis).padding(.top) },
+                                label: { Text(l10n.t("Reminders", ru: "Напоминания")).font(.title2).bold() }
+                            )
+                            .padding(.horizontal)
+
+                            // Speaker Insights
+                            if !analysis.speakerInsights.isEmpty {
+                                DisclosureGroup(
+                                    content: { SpeakerInsightsView(insights: analysis.speakerInsights).padding(.top) },
+                                    label: { Text(l10n.t("Speaker Insights", ru: "Инсайты по спикерам")).font(.title2).bold() }
+                                )
+                                .padding(.horizontal)
+                            }
+
+                            // Transcript
+                            DisclosureGroup(
+                                content: { TranscriptView(transcript: session.transcript).frame(height: 400).padding(.top) },
+                                label: { Text(l10n.t("Transcript", ru: "Транскрипт")).font(.title2).bold() }
+                            )
+                            .padding(.horizontal)
+                        } else {
+                            Text(l10n.t("No analysis available", ru: "Нет анализа"))
+                                .foregroundColor(.secondary)
+                                .padding()
+                        }
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 16)
-
-                    // Audio Player card
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
-                            audioPlayer.togglePlayback(audioURL: url)
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(width: 72, height: 72)
-                                Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.title)
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .buttonStyle(.plain)
-
-                        VStack(spacing: 6) {
-                            Slider(value: playbackProgress)
-                            HStack {
-                                Text(formatDuration(audioPlayer.currentTime)).foregroundColor(.secondary)
-                                Spacer()
-                                Text(formatDuration(displayDuration)).foregroundColor(.secondary)
-                            }
-                            .font(.caption)
-
-                            if let analysis = session.analysis {
-                                let markers: [AudioMarkersBar.Marker] = analysis.keyMoments.compactMap { km in
-                                    guard let hint = km.timeHint,
-                                          let seconds = TimelinePointBuilder.parseTimeHintSeconds(hint) else { return nil }
-                                    return AudioMarkersBar.Marker(
-                                        timeSeconds: seconds,
-                                        title: km.type ?? l10n.t("moment", ru: "момент"),
-                                        subtitle: km.speaker
-                                    )
-                                }
-
-                                if !markers.isEmpty {
-                                    AudioMarkersBar(
-                                        duration: displayDuration,
-                                        currentTime: audioPlayer.currentTime,
-                                        markers: markers,
-                                        onSeek: { seekInAudio($0) }
-                                    )
-                                }
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    .padding()
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .cornerRadius(14)
-                    .padding(.horizontal)
-
-                    // Content
-                    if let analysis = session.analysis {
-                        Picker("", selection: $selectedTab) {
-                            Text(l10n.t("Overview", ru: "Обзор")).tag(0)
-                            Text(l10n.t("Analysis", ru: "Анализ")).tag(1)
-                            Text(l10n.t("Reminders", ru: "Напоминания")).tag(2)
-                            Text(l10n.t("Transcript", ru: "Транскрипт")).tag(3)
-                            Text(l10n.t("Timeline", ru: "Таймлайн")).tag(4)
-                            Text(l10n.t("Speakers", ru: "Собеседники")).tag(5)
-                        }
-                        .pickerStyle(.segmented)
-                        .padding()
-
-                        ScrollView {
-                            VStack(spacing: 20) {
-                                if selectedTab == 0 {
-                                    OverviewView(analysis: analysis)
-                                } else if selectedTab == 1 {
-                                    DetailedAnalysisView(analysis: analysis)
-                                } else if selectedTab == 2 {
-                                    RemindersView(analysis: analysis)
-                                } else if selectedTab == 3 {
-                                    TranscriptView(transcript: session.transcript)
-                                } else if selectedTab == 4 {
-                                    TimelineView(
-                                        transcript: session.transcript ?? "",
-                                        duration: session.duration,
-                                        keyMoments: analysis.keyMoments,
-                                        onSeek: { seekInAudio($0) }
-                                    )
-                                } else {
-                                    SpeakerInsightsView(insights: analysis.speakerInsights)
-                                }
-                            }
-                            .padding()
-                        }
-                    } else {
-                        Spacer()
-                        Text(l10n.t("No analysis available", ru: "Нет анализа"))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
+                    .padding(.bottom, 40)
                 }
                 .background(Color(nsColor: .windowBackgroundColor))
             } else {
@@ -191,12 +129,6 @@ struct SessionDetailView: View {
                 .background(Color(nsColor: .windowBackgroundColor))
             }
         }
-    }
-    
-    func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
     }
 
     private var displayDuration: TimeInterval {
@@ -368,7 +300,7 @@ private struct RemindersView: View {
     }
 }
 
-struct OverviewView: View {
+struct OverviewGrid: View {
     let analysis: Analysis
     @EnvironmentObject private var l10n: LocalizationService
 

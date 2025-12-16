@@ -3,55 +3,63 @@ import SwiftUI
 struct SonusLogo: View {
     var size: CGFloat = 22
 
-    @State private var draw: CGFloat = 0
+    @State private var phase: CGFloat = 0
+    @State private var textOpacity: Double = 0
 
     var body: some View {
         HStack(spacing: 10) {
-            SonusWaveMark()
-                .trim(from: 0, to: draw)
+            SonusWaveMark(phase: phase)
                 .stroke(
-                    Color.primary,
+                    LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing),
                     style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
                 )
                 .frame(width: size, height: size)
                 .onAppear {
-                    withAnimation(.easeInOut(duration: 0.65)) {
-                        draw = 1
+                    withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
+                        phase = 1
+                    }
+                    withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
+                        textOpacity = 1
                     }
                 }
 
             Text("Sonus")
                 .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .tracking(0.8)
+                .opacity(textOpacity)
         }
         .accessibilityLabel("Sonus")
     }
 }
 
 private struct SonusWaveMark: Shape {
+    var phase: CGFloat
+    
+    var animatableData: CGFloat {
+        get { phase }
+        set { phase = newValue }
+    }
+
     func path(in rect: CGRect) -> Path {
         var p = Path()
-
-        // A simple "SVG-like" waveform mark.
-        // 4 peaks with smooth curves.
         let w = rect.width
         let h = rect.height
 
         func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
             CGPoint(x: rect.minX + x * w, y: rect.minY + y * h)
         }
+        
+        // Simple sine-based wave for continuous animation
+        let midY = h / 2
+        p.move(to: CGPoint(x: 0, y: midY))
+        
+        for x in stride(from: 0, through: w, by: 1) {
+            let relativeX = x / w
+            let sine = sin((relativeX + phase) * .pi * 4) // 2 cycles
+            let y = midY + sine * (h * 0.4)
+            p.addLine(to: CGPoint(x: x, y: y))
+        }
 
-        p.move(to: pt(0.05, 0.55))
-        p.addCurve(to: pt(0.20, 0.30), control1: pt(0.10, 0.55), control2: pt(0.14, 0.32))
-        p.addCurve(to: pt(0.32, 0.65), control1: pt(0.24, 0.28), control2: pt(0.28, 0.66))
-
-        p.addCurve(to: pt(0.45, 0.18), control1: pt(0.36, 0.64), control2: pt(0.40, 0.22))
-        p.addCurve(to: pt(0.58, 0.72), control1: pt(0.50, 0.14), control2: pt(0.54, 0.74))
-
-        p.addCurve(to: pt(0.72, 0.35), control1: pt(0.62, 0.70), control2: pt(0.67, 0.36))
-        p.addCurve(to: pt(0.84, 0.62), control1: pt(0.76, 0.34), control2: pt(0.80, 0.63))
-
-        p.addCurve(to: pt(0.95, 0.50), control1: pt(0.88, 0.61), control2: pt(0.92, 0.52))
         return p
     }
 }
