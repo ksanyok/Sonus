@@ -8,6 +8,8 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
     
     var transcript: String? = nil
     var analysis: Analysis? = nil
+    var analysisUpdatedAt: Date? = nil
+    var analysisSchemaVersion: Int? = nil
     var isProcessing: Bool = false
     var category: SessionCategory = .personal
     var customTitle: String? = nil

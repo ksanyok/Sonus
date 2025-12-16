@@ -19,7 +19,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(SidebarListStyle())
-        .navigationTitle("Sonus")
+        .navigationTitle("")
     }
 }
 

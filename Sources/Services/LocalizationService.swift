@@ -15,7 +15,6 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
-@MainActor
 final class LocalizationService: ObservableObject {
     static let storageKey = "sonus.language"
 

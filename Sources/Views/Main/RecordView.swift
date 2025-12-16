@@ -3,9 +3,11 @@ import SwiftUI
 struct RecordView: View {
     @ObservedObject var viewModel: AppViewModel
     @ObservedObject var recorder: AudioRecorder
+    @Binding var sidebarSelection: SidebarItem?
     @EnvironmentObject private var l10n: LocalizationService
     @State private var isHovering = false
     @State private var pulseAnimation = false
+    @State private var startingPulse = false
     
     var body: some View {
         ZStack {
@@ -32,28 +34,60 @@ struct RecordView: View {
             
             VStack(spacing: 28) {
                 HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(recorder.isRecording ? l10n.t("Recording", ru: "Запись") : l10n.t("Ready", ru: "Готов"), systemImage: recorder.isRecording ? "record.circle" : "waveform")
-                            .font(.headline)
-                            .foregroundColor(recorder.isRecording ? .red : .white.opacity(0.9))
-                        Text(l10n.t("Hotkey: Cmd+Shift+Space (configurable in Settings)", ru: "Хоткей: Cmd+Shift+Space (настраивается в Settings)"))
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    Spacer()
-                    Capsule()
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 36)
-                        .overlay(
-                            HStack(spacing: 12) {
-                                Image(systemName: "waveform.path.ecg")
-                                Text(recorder.isRecording ? l10n.t("Live", ru: "Live") : l10n.t("Standby", ru: "Ожидание"))
+                    SonusTopBar(
+                        left: AnyView(
+                            HStack(spacing: 10) {
+                                Button {
+                                    sidebarSelection = .history
+                                } label: {
+                                    Label(l10n.t("History", ru: "История"), systemImage: "clock.fill")
+                                }
+                                .buttonStyle(.bordered)
+
+                                Button {
+                                    sidebarSelection = .settings
+                                } label: {
+                                    Label(l10n.t("Settings", ru: "Настройки"), systemImage: "gear")
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding(.horizontal, 14)
+                            .foregroundColor(.white.opacity(0.9))
+                        ),
+                        right: AnyView(
+                            HStack(spacing: 10) {
+                                Label(
+                                    recorder.isRecording
+                                        ? l10n.t("Recording", ru: "Запись")
+                                        : (viewModel.isStartingRecording ? l10n.t("Starting…", ru: "Запуск…") : l10n.t("Ready", ru: "Готов")),
+                                    systemImage: recorder.isRecording ? "record.circle" : (viewModel.isStartingRecording ? "hourglass" : "waveform")
+                                )
+                                .font(.headline)
+                                .foregroundColor(recorder.isRecording ? .red : .white.opacity(0.9))
+
+                                Capsule()
+                                    .fill(Color.white.opacity(0.1))
+                                    .frame(height: 32)
+                                    .overlay(
+                                        HStack(spacing: 10) {
+                                            Image(systemName: "waveform.path.ecg")
+                                            Text(recorder.isRecording ? l10n.t("Live", ru: "Live") : l10n.t("Standby", ru: "Ожидание"))
+                                        }
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .padding(.horizontal, 12)
+                                    )
+                            }
                         )
+                    )
+                    .foregroundColor(.white.opacity(0.92))
                 }
                 .padding(.horizontal, 4)
+
+                Text(l10n.t("Hotkey: Cmd+Shift+Space (configurable in Settings)", ru: "Хоткей: Cmd+Shift+Space (настраивается в Settings)"))
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
                 
                 HStack(alignment: .top, spacing: 20) {
                     // Left: recording card
@@ -137,6 +171,16 @@ struct RecordView: View {
                                         }
                                     }) {
                                         ZStack {
+                                            // Starting pulse ring (visual feedback immediately on tap)
+                                            if viewModel.isStartingRecording && !recorder.isRecording {
+                                                Circle()
+                                                    .stroke(Color.white.opacity(0.25), lineWidth: 3)
+                                                    .frame(width: 134, height: 134)
+                                                    .scaleEffect(startingPulse ? 1.08 : 0.95)
+                                                    .opacity(startingPulse ? 0.2 : 0.55)
+                                                    .animation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true), value: startingPulse)
+                                            }
+
                                             Circle()
                                                 .stroke(
                                                     LinearGradient(
@@ -214,8 +258,16 @@ struct RecordView: View {
             .padding(24)
         }
         .onAppear {
+            viewModel.prewarmRecording()
             withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                 pulseAnimation = true
+            }
+        }
+        .onChange(of: viewModel.isStartingRecording) { _, newValue in
+            if newValue {
+                startingPulse = true
+            } else {
+                startingPulse = false
             }
         }
     }

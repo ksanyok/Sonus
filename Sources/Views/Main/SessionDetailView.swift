@@ -11,6 +11,22 @@ struct SessionDetailView: View {
     private var session: Session? {
         viewModel.sessions.first(where: { $0.id == sessionID })
     }
+
+    private func needsAnalysisUpdate(_ session: Session) -> Bool {
+        guard session.analysis != nil else { return false }
+        let v = session.analysisSchemaVersion ?? 0
+        return v < OpenAIClient.analysisSchemaVersion
+    }
+
+    private func seekInAudio(_ seconds: TimeInterval) {
+        guard let session else { return }
+        let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
+        // If player hasn't been initialized yet, start playback first so seek works.
+        if audioPlayer.duration <= 0 {
+            audioPlayer.startPlayback(audioURL: url)
+        }
+        audioPlayer.seek(to: seconds)
+    }
     
     var body: some View {
         Group {
@@ -38,9 +54,12 @@ struct SessionDetailView: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 10) {
                             HStack(spacing: 10) {
-                                Button(l10n.t("Analyze", ru: "Анализ")) { viewModel.processSession(session) }
-                                    .buttonStyle(.borderedProminent)
-                                    .disabled(session.isProcessing)
+                                AnalyzeActionButton(
+                                    isProcessing: session.isProcessing,
+                                    lastAnalyzedAt: session.analysisUpdatedAt,
+                                    needsUpdate: needsAnalysisUpdate(session),
+                                    onAnalyze: { viewModel.processSession(session) }
+                                )
                                 Button(l10n.t("Delete", ru: "Удалить"), role: .destructive) { viewModel.deleteSession(session) }
                                     .buttonStyle(.bordered)
                             }
@@ -89,6 +108,27 @@ struct SessionDetailView: View {
                                 Text(formatDuration(displayDuration)).foregroundColor(.secondary)
                             }
                             .font(.caption)
+
+                            if let analysis = session.analysis {
+                                let markers: [AudioMarkersBar.Marker] = analysis.keyMoments.compactMap { km in
+                                    guard let hint = km.timeHint,
+                                          let seconds = TimelinePointBuilder.parseTimeHintSeconds(hint) else { return nil }
+                                    return AudioMarkersBar.Marker(
+                                        timeSeconds: seconds,
+                                        title: km.type ?? l10n.t("moment", ru: "момент"),
+                                        subtitle: km.speaker
+                                    )
+                                }
+
+                                if !markers.isEmpty {
+                                    AudioMarkersBar(
+                                        duration: displayDuration,
+                                        currentTime: audioPlayer.currentTime,
+                                        markers: markers,
+                                        onSeek: { seekInAudio($0) }
+                                    )
+                                }
+                            }
                         }
                         .padding(.vertical, 8)
                     }
@@ -124,7 +164,8 @@ struct SessionDetailView: View {
                                     TimelineView(
                                         transcript: session.transcript ?? "",
                                         duration: session.duration,
-                                        keyMoments: analysis.keyMoments
+                                        keyMoments: analysis.keyMoments,
+                                        onSeek: { seekInAudio($0) }
                                     )
                                 } else {
                                     SpeakerInsightsView(insights: analysis.speakerInsights)
@@ -171,6 +212,55 @@ struct SessionDetailView: View {
             guard displayDuration > 0 else { return }
             audioPlayer.seek(to: ratio * displayDuration)
         })
+    }
+}
+
+private struct AnalyzeActionButton: View {
+    let isProcessing: Bool
+    let lastAnalyzedAt: Date?
+    let needsUpdate: Bool
+    let onAnalyze: () -> Void
+
+    @EnvironmentObject private var l10n: LocalizationService
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Button {
+                onAnalyze()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: needsUpdate ? "sparkles" : "wand.and.stars")
+                    Text(l10n.t("Analyze", ru: "Анализ"))
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(needsUpdate ? .orange : .accentColor)
+            .disabled(isProcessing)
+
+            if let lastAnalyzedAt {
+                Text(lastAnalyzedString(lastAnalyzedAt))
+                    .font(.caption2)
+                    .foregroundColor(needsUpdate ? .orange : .secondary)
+            } else {
+                Text(l10n.t("Not analyzed yet", ru: "Ещё не анализировали"))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            if needsUpdate {
+                Text(l10n.t("New insights available", ru: "Доступны новые метрики"))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private func lastAnalyzedString(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = l10n.locale
+        df.dateStyle = .medium
+        df.timeStyle = .short
+        return l10n.t("Last: ", ru: "Последний: ") + df.string(from: date)
     }
 }
 
@@ -281,6 +371,10 @@ private struct RemindersView: View {
 struct OverviewView: View {
     let analysis: Analysis
     @EnvironmentObject private var l10n: LocalizationService
+
+    private let metricColumns = [
+        GridItem(.adaptive(minimum: 190), spacing: 14)
+    ]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -296,12 +390,36 @@ struct OverviewView: View {
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(12)
             
-            // Key Metrics
-            HStack(spacing: 20) {
+            LazyVGrid(columns: metricColumns, spacing: 14) {
                 MetricCard(title: l10n.t("Score", ru: "Оценка"), value: "\(analysis.score)%", icon: "chart.bar.fill", color: .blue)
                 MetricCard(title: l10n.t("Sentiment", ru: "Тон"), value: analysis.sentiment, icon: "face.smiling", color: .green)
                 MetricCard(title: l10n.t("Engagement", ru: "Вовлечённость"), value: "\(analysis.engagementScore)%", icon: "person.2.wave.2.fill", color: .orange)
                 MetricCard(title: l10n.t("Sales Prob.", ru: "Вероятность"), value: "\(analysis.salesProbability)%", icon: "cart.badge.plus", color: .pink)
+
+                MetricCard(
+                    title: l10n.t("Objections", ru: "Возражения"),
+                    value: "\(analysis.objections.count)",
+                    icon: "exclamationmark.bubble",
+                    color: .red
+                )
+                MetricCard(
+                    title: l10n.t("Key moments", ru: "Ключевые"),
+                    value: "\(analysis.keyMoments.count)",
+                    icon: "bookmark.fill",
+                    color: .purple
+                )
+                MetricCard(
+                    title: l10n.t("Reminders", ru: "Напоминания"),
+                    value: "\(analysis.commitments.count + analysis.actionItems.count)",
+                    icon: "checklist",
+                    color: .orange
+                )
+                MetricCard(
+                    title: l10n.t("Questions", ru: "Вопросы"),
+                    value: "\(analysis.conversationMetrics?.questionCount ?? 0)",
+                    icon: "questionmark.bubble",
+                    color: .blue
+                )
             }
             
             // Speakers / Languages

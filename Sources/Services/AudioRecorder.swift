@@ -24,9 +24,46 @@ class AudioRecorder: NSObject, ObservableObject {
     private let writerQueue = DispatchQueue(label: "com.sonus.audioRecorder.writer")
     private let chunkDuration: TimeInterval = 8
     private var lastLevelUpdate: Date = .distantPast
+
+    private var isEngineRunning: Bool = false
     
     override init() {
         super.init()
+
+        // Best-effort: create chunk directory early to avoid doing it on the first start.
+        try? FileManager.default.createDirectory(at: chunksDirectoryURL, withIntermediateDirectories: true)
+    }
+
+    var isPermissionGranted: Bool {
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    }
+
+    /// Pre-start the audio engine to reduce initial recording latency.
+    func warmUpEngineIfPossible() {
+        guard isPermissionGranted else { return }
+        if isEngineRunning { return }
+
+        // AVAudioEngine graph operations can be fragile off-main on newer macOS.
+        // Make warm-up best-effort and never crash the app.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.warmUpEngineIfPossible()
+            }
+            return
+        }
+
+        do {
+            // Prime the graph so prepare/start doesn't trip internal assertions.
+            let input = audioEngine.inputNode
+            _ = input.outputFormat(forBus: 0)
+            _ = audioEngine.mainMixerNode
+
+            audioEngine.prepare()
+            try audioEngine.start()
+            isEngineRunning = true
+        } catch {
+            // Ignore warm-up failures; startRecording will surface errors.
+        }
     }
     
     func requestPermission() async -> Bool {
@@ -44,6 +81,13 @@ class AudioRecorder: NSObject, ObservableObject {
     func startRecording() throws -> String {
         if isRecording { return currentFilename ?? "" }
 
+        // Make sure engine is already running (or starts now).
+        if !isEngineRunning {
+            audioEngine.prepare()
+            try audioEngine.start()
+            isEngineRunning = true
+        }
+
         let filename = UUID().uuidString + ".wav"
         let audioURL = PersistenceService.shared.getAudioURL(for: filename)
 
@@ -56,7 +100,7 @@ class AudioRecorder: NSObject, ObservableObject {
         currentFilename = filename
         currentFileURL = audioURL
 
-        // Prepare chunk directory
+        // Prepare chunk directory (already created in init, but keep it safe).
         try FileManager.default.createDirectory(at: chunksDirectoryURL, withIntermediateDirectories: true)
         chunkFile = try createNewChunkFile(format: format)
         chunkStartDate = Date()
@@ -70,8 +114,6 @@ class AudioRecorder: NSObject, ObservableObject {
             self.handleIncomingAudio(buffer: buffer)
         }
 
-        audioEngine.prepare()
-        try audioEngine.start()
         isRecording = true
 
         return filename
@@ -81,7 +123,7 @@ class AudioRecorder: NSObject, ObservableObject {
         guard isRecording else { return nil }
 
         audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
+        // Keep engine running to make the next start near-instant.
 
         isRecording = false
 

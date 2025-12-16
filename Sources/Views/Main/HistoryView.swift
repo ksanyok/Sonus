@@ -18,15 +18,20 @@ struct HistoryView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            SonusTopBar()
+                .background(Color(nsColor: .controlBackgroundColor))
+
             // Categories Header
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     CategoryPill(title: l10n.t("All", ru: "Все"), icon: "tray.full.fill", isSelected: selectedCategory == nil) {
+                        print("[History] Filter -> All")
                         withAnimation { selectedCategory = nil }
                     }
                     
                     ForEach(SessionCategory.allCases) { category in
                         CategoryPill(title: l10n.t(category.displayNameEn, ru: category.displayNameRu), icon: category.icon, isSelected: selectedCategory == category) {
+                            print("[History] Filter -> \(category.rawValue)")
                             withAnimation { selectedCategory = category }
                         }
                     }
@@ -108,6 +113,11 @@ struct SessionCard: View {
     let onEdit: () -> Void
     @EnvironmentObject private var l10n: LocalizationService
     @State private var isHovering = false
+
+    private var needsUpdate: Bool {
+        guard session.analysis != nil else { return false }
+        return (session.analysisSchemaVersion ?? 0) < OpenAIClient.analysisSchemaVersion
+    }
     
     var body: some View {
         HStack(spacing: 16) {
@@ -184,9 +194,29 @@ struct SessionCard: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Button(l10n.t("Analyze", ru: "Анализ")) { onAnalyze() }
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Button {
+                            onAnalyze()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: needsUpdate ? "sparkles" : "wand.and.stars")
+                                Text(l10n.t("Analyze", ru: "Анализ"))
+                            }
+                        }
                         .buttonStyle(.borderedProminent)
+                        .tint(needsUpdate ? .orange : .accentColor)
                         .controlSize(.small)
+
+                        if let d = session.analysisUpdatedAt {
+                            Text(lastAnalyzedString(d))
+                                .font(.caption2)
+                                .foregroundColor(needsUpdate ? .orange : .secondary)
+                        } else {
+                            Text(l10n.t("Not analyzed", ru: "Не проанализировано"))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                     Button(l10n.t("Edit", ru: "Правка")) { onEdit() }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -223,6 +253,14 @@ struct SessionCard: View {
         case 50..<75: return .orange
         default: return .green
         }
+    }
+
+    private func lastAnalyzedString(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = l10n.locale
+        df.dateStyle = .short
+        df.timeStyle = .short
+        return l10n.t("Last: ", ru: "Последний: ") + df.string(from: date)
     }
 }
 

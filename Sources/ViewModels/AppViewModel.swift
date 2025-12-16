@@ -2,8 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 
-@MainActor
-class AppViewModel: ObservableObject {
+final class AppViewModel: ObservableObject, @unchecked Sendable {
     @Published var sessions: [Session] = []
     @Published var selectedSession: Session?
     @Published var isSettingsPresented = false
@@ -16,6 +15,7 @@ class AppViewModel: ObservableObject {
     @Published var engagement: Double = 0.7 // 0..1, влияет на цвет пузыря
 
     @Published var isRecording: Bool = false
+    @Published var isStartingRecording: Bool = false
 
     @Published var processingStatus: [UUID: String] = [:]
     @Published var processingProgress: [UUID: Double] = [:]
@@ -36,6 +36,7 @@ class AppViewModel: ObservableObject {
     init() {
         // Bind sessions from persistence
         persistence.$sessions
+            .receive(on: RunLoop.main)
             .assign(to: \.sessions, on: self)
             .store(in: &cancellables)
 
@@ -46,6 +47,7 @@ class AppViewModel: ObservableObject {
 
         // Подписка на внешние подсказки (для будущих realtime моделей)
         NotificationCenter.default.publisher(for: .newHint)
+            .receive(on: RunLoop.main)
             .sink { [weak self] note in
                 guard let self else { return }
                 let question = note.userInfo?["question"] as? String ?? "Вопрос не распознан"
@@ -61,18 +63,58 @@ class AppViewModel: ObservableObject {
     }
     
     func startRecording() {
+        DispatchQueue.main.async { [weak self] in
+            self?.isStartingRecording = true
+        }
+
+        // Fast path: permission already granted.
+        if audioRecorder.isPermissionGranted {
+            do {
+                audioRecorder.warmUpEngineIfPossible()
+                startLivePipelineIfNeeded()
+                _ = try audioRecorder.startRecording()
+                DispatchQueue.main.async { [weak self] in
+                    self?.isStartingRecording = false
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    self?.isStartingRecording = false
+                    self?.errorMessage = "Failed to start recording: \(error.localizedDescription)"
+                    self?.showError = true
+                }
+            }
+            return
+        }
+
+        // Slow path: ask for permission.
         Task {
             if await audioRecorder.requestPermission() {
                 do {
+                    audioRecorder.warmUpEngineIfPossible()
                     startLivePipelineIfNeeded()
                     _ = try audioRecorder.startRecording()
+                    await MainActor.run { self.isStartingRecording = false }
                 } catch {
-                    self.errorMessage = "Failed to start recording: \(error.localizedDescription)"
-                    self.showError = true
+                    await MainActor.run {
+                        self.isStartingRecording = false
+                        self.errorMessage = "Failed to start recording: \(error.localizedDescription)"
+                        self.showError = true
+                    }
                 }
             } else {
-                self.errorMessage = "Microphone permission denied."
-                self.showError = true
+                await MainActor.run {
+                    self.isStartingRecording = false
+                    self.errorMessage = "Microphone permission denied."
+                    self.showError = true
+                }
+            }
+        }
+    }
+
+    func prewarmRecording() {
+        Task {
+            if await audioRecorder.requestPermission() {
+                audioRecorder.warmUpEngineIfPossible()
             }
         }
     }
@@ -86,20 +128,20 @@ class AppViewModel: ObservableObject {
                 audioFilename: result.filename,
                 transcript: nil,
                 analysis: nil,
+                analysisUpdatedAt: nil,
+                analysisSchemaVersion: nil,
                 isProcessing: false,
                 category: draftCategory,
                 customTitle: draftTitle.isEmpty ? nil : draftTitle
             )
             persistence.saveSession(newSession)
             // reset drafts
-            draftTitle = ""
-            draftCategory = .personal
-            
-            // Auto-process if key exists? Maybe optional.
-            // For now, user manually triggers or we trigger if key is present.
-            if KeychainService.shared.load() != nil {
-                processSession(newSession)
+            DispatchQueue.main.async { [weak self] in
+                self?.draftTitle = ""
+                self?.draftCategory = .personal
             }
+            
+            // Analysis is manual-only: user triggers it explicitly.
         }
 
         stopLivePipeline()
@@ -112,8 +154,11 @@ class AppViewModel: ObservableObject {
         pendingLiveChunks.removeAll()
 
         audioRecorder.onChunkReady = { [weak self] chunkURL in
-            guard let self else { return }
-            self.enqueueLiveChunk(url: chunkURL)
+            // AudioRecorder guarantees main queue for this callback today, but keep it
+            // MainActor-safe to avoid crashes if that ever changes.
+            Task { @MainActor in
+                self?.enqueueLiveChunk(url: chunkURL)
+            }
         }
     }
 
@@ -139,31 +184,40 @@ class AppViewModel: ObservableObject {
         guard !pendingLiveChunks.isEmpty else { return }
 
         let url = pendingLiveChunks.removeFirst()
-        liveAnalysisTask = Task {
+        liveAnalysisTask = Task.detached(priority: .utility) { [weak self] in
             defer {
                 try? FileManager.default.removeItem(at: url)
                 Task { @MainActor in
-                    self.liveAnalysisTask = nil
-                    self.drainLiveQueueIfNeeded()
+                    self?.liveAnalysisTask = nil
+                    self?.drainLiveQueueIfNeeded()
                 }
             }
 
-            guard KeychainService.shared.load() != nil else { return }
-            guard audioRecorder.isRecording else { return }
+            guard let self else { return }
+
+            // Gate on main-actor state.
+            let shouldRun = await MainActor.run {
+                (KeychainService.shared.load() != nil) && self.audioRecorder.isRecording && self.isLivePipelineActive
+            }
+            guard shouldRun else { return }
 
             do {
-                let piece = try await openAI.transcribe(audioURL: url)
-                if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+                let piece = try await self.openAI.transcribe(audioURL: url)
+                let trimmed = piece.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
 
-                liveTranscriptBuffer += "\n" + piece
-                if liveTranscriptBuffer.count > 2500 {
-                    liveTranscriptBuffer = String(liveTranscriptBuffer.suffix(2500))
+                let context = await MainActor.run { () -> String in
+                    self.liveTranscriptBuffer += "\n" + trimmed
+                    if self.liveTranscriptBuffer.count > 2500 {
+                        self.liveTranscriptBuffer = String(self.liveTranscriptBuffer.suffix(2500))
+                    }
+                    return self.liveTranscriptBuffer
                 }
 
-                let hint = try await openAI.liveHint(context: liveTranscriptBuffer)
+                let hint = try await self.openAI.liveHint(context: context)
                 let q = hint.question.trimmingCharacters(in: .whitespacesAndNewlines)
                 let a = hint.answer.trimmingCharacters(in: .whitespacesAndNewlines)
-                if q.isEmpty && a.isEmpty { return }
+                guard !(q.isEmpty && a.isEmpty) else { return }
 
                 await MainActor.run {
                     self.showHint(question: q.isEmpty ? "Контекст" : q, answer: a, engagement: hint.engagement)
@@ -203,8 +257,10 @@ class AppViewModel: ObservableObject {
         updatedSession.isProcessing = true
         persistence.saveSession(updatedSession)
 
-        processingStatus[session.id] = "Подготовка…"
-        processingProgress[session.id] = 0
+        DispatchQueue.main.async { [weak self] in
+            self?.processingStatus[session.id] = "Подготовка…"
+            self?.processingProgress[session.id] = 0
+        }
         
         Task {
             do {
@@ -212,7 +268,7 @@ class AppViewModel: ObservableObject {
                 
                 // 1. Transcribe
                 let transcript = try await openAI.transcribe(audioURL: audioURL) { [weak self] progress, message in
-                    Task { @MainActor in
+                    DispatchQueue.main.async {
                         self?.processingStatus[session.id] = message
                         self?.processingProgress[session.id] = progress
                     }
@@ -224,26 +280,33 @@ class AppViewModel: ObservableObject {
                 persistence.saveSession(updatedSession)
                 
                 // 2. Analyze
-                self.processingStatus[session.id] = "Анализ (JSON)…"
-                self.processingProgress[session.id] = 0.92
+                DispatchQueue.main.async { [weak self] in
+                    self?.processingStatus[session.id] = "Анализ (JSON)…"
+                    self?.processingProgress[session.id] = 0.92
+                }
                 let analysis = try await openAI.analyze(text: transcript)
                 
                 updatedSession.analysis = analysis
+                updatedSession.analysisUpdatedAt = Date()
+                updatedSession.analysisSchemaVersion = OpenAIClient.analysisSchemaVersion
                 updatedSession.isProcessing = false
                 persistence.saveSession(updatedSession)
 
-                self.processingStatus[session.id] = nil
-                self.processingProgress[session.id] = nil
+                DispatchQueue.main.async { [weak self] in
+                    self?.processingStatus[session.id] = nil
+                    self?.processingProgress[session.id] = nil
+                }
                 
             } catch {
                 updatedSession.isProcessing = false
                 persistence.saveSession(updatedSession)
 
-                self.processingStatus[session.id] = nil
-                self.processingProgress[session.id] = nil
-                
-                self.errorMessage = error.localizedDescription
-                self.showError = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.processingStatus[session.id] = nil
+                    self?.processingProgress[session.id] = nil
+                    self?.errorMessage = error.localizedDescription
+                    self?.showError = true
+                }
             }
         }
     }

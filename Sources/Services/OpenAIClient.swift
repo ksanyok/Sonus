@@ -23,6 +23,8 @@ enum OpenAIError: Error, LocalizedError {
 
 class OpenAIClient {
     static let shared = OpenAIClient()
+    /// Bump when the analysis JSON schema / prompts change in a way that should trigger re-analysis.
+    static let analysisSchemaVersion: Int = 3
     private let baseURL = "https://api.openai.com/v1"
 
     private lazy var session: URLSession = {

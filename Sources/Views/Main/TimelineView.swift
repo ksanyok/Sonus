@@ -5,6 +5,7 @@ struct TimelineView: View {
     let transcript: String
     let duration: TimeInterval
     let keyMoments: [KeyMoment]
+    let onSeek: ((TimeInterval) -> Void)?
 
     @EnvironmentObject private var l10n: LocalizationService
 
@@ -12,6 +13,7 @@ struct TimelineView: View {
 
     var body: some View {
         let points = TimelinePointBuilder.build(transcript: transcript, duration: duration)
+        let highlights = TimelineHighlightBuilder.build(points: points, keyMoments: keyMoments, l10n: l10n)
 
         VStack(alignment: .leading, spacing: 12) {
             if points.isEmpty {
@@ -20,6 +22,20 @@ struct TimelineView: View {
             } else {
                 Chart {
                     ForEach(points) { p in
+                        BarMark(
+                            x: .value("Time", p.midSeconds),
+                            y: .value("Events", Double(p.conflictWordsCount)),
+                            width: .fixed(6)
+                        )
+                        .foregroundStyle(.secondary.opacity(0.22))
+
+                        BarMark(
+                            x: .value("Time", p.midSeconds),
+                            y: .value("Pauses", Double(p.pausesCount)),
+                            width: .fixed(6)
+                        )
+                        .foregroundStyle(.tertiary)
+
                         LineMark(
                             x: .value("Time", p.midSeconds),
                             y: .value("Emotional", p.emotionalIntensity)
@@ -108,6 +124,55 @@ struct TimelineView: View {
                 Text(l10n.t("Note: timeline is approximate (derived from transcript segments).", ru: "Важно: таймлайн приблизительный (построен по фрагментам транскрипта)."))
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                if !highlights.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(l10n.t("Important slices", ru: "Важные вырезки"), systemImage: "bookmark")
+                            .font(.headline)
+
+                        ForEach(highlights) { h in
+                            Button {
+                                if let t = h.seekSeconds {
+                                    onSeek?(t)
+                                }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(spacing: 10) {
+                                        Text(h.timeLabel)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        if h.seekSeconds != nil {
+                                            Text(l10n.t("Go", ru: "Перейти"))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+
+                                    Text(h.title)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+
+                                    if let snippet = h.snippet, !snippet.isEmpty {
+                                        Text(snippet)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(3)
+                                    }
+
+                                    if !h.tags.isEmpty {
+                                        WrapChips(items: h.tags)
+                                    }
+                                }
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                                .cornerRadius(12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
         }
         .padding()
@@ -185,6 +250,8 @@ struct TimelinePoint: Identifiable {
     let emotionalIntensity: Double // 0..100
     let tension: Double // 0..100
     let negationsCount: Int
+    let pausesCount: Int
+    let conflictWordsCount: Int
 
     let reasons: [String]
     let snippet: String?
@@ -214,9 +281,10 @@ enum TimelinePointBuilder {
             let text = segments[i]
 
             let negations = countMatches(in: text, pattern: "\\b(не|нет|никак|никогда|нельзя|невозможно|откажусь)\\b")
+            let pauses = countMatches(in: text, pattern: "(\\(pause\\)|\\(пауза\\)|\\[silence\\]|\\[тишина\\]|\\.{3,}|…)")
             let exclam = text.filter { $0 == "!" }.count
             let questions = text.filter { $0 == "?" }.count
-            let conflictWords = countMatches(in: text.lowercased(), pattern: "(дорого|проблем|не устраивает|возраж|конфликт|скандал|не согласен|не подходит)")
+            let conflictWords = countMatches(in: text.lowercased(), pattern: "(дорого|проблем|не устраивает|возраж|конфликт|скандал|не согласен|не подходит|неприемлем|возражение|раздраж|срыв)")
 
             // Emotional intensity is a blend of punctuation + conflict words.
             let emotional = clamp01(Double(exclam) / 6.0) * 50
@@ -243,6 +311,8 @@ enum TimelinePointBuilder {
                     emotionalIntensity: min(100, emotional),
                     tension: min(100, tension),
                     negationsCount: negations,
+                    pausesCount: pauses,
+                    conflictWordsCount: conflictWords,
                     reasons: reasons,
                     snippet: snippet
                 )
@@ -346,5 +416,72 @@ enum TimelinePointBuilder {
         if t.isEmpty { return nil }
         if t.count <= 200 { return t }
         return String(t.prefix(200)) + "…"
+    }
+}
+
+private struct TimelineHighlight: Identifiable {
+    let id = UUID()
+    let timeLabel: String
+    let title: String
+    let snippet: String?
+    let tags: [String]
+    let seekSeconds: TimeInterval?
+}
+
+private enum TimelineHighlightBuilder {
+    @MainActor
+    static func build(points: [TimelinePoint], keyMoments: [KeyMoment], l10n: LocalizationService) -> [TimelineHighlight] {
+        var out: [TimelineHighlight] = []
+
+        // 1) Key moments with time hints first
+        for m in keyMoments.prefix(12) {
+            let t = m.timeHint.flatMap { TimelinePointBuilder.parseTimeHintSeconds($0) }
+            let timeLabel = m.timeHint ?? (t != nil ? TimelinePointBuilder.formatHMS(t!) : "")
+            out.append(
+                TimelineHighlight(
+                    timeLabel: timeLabel.isEmpty ? "" : timeLabel,
+                    title: (m.type ?? l10n.t("moment", ru: "момент")) + (m.speaker.map { " — \($0)" } ?? ""),
+                    snippet: m.text,
+                    tags: [m.type].compactMap { $0 },
+                    seekSeconds: t
+                )
+            )
+        }
+
+        // 2) Top intensity buckets (approximate)
+        let scored = points.enumerated().map { (idx, p) -> (Int, Double) in
+            let score = p.emotionalIntensity * 0.55 + p.tension * 0.35 + Double(p.negationsCount) * 0.8 + Double(p.conflictWordsCount) * 2.0
+            return (idx, score)
+        }
+        let top = scored.sorted(by: { $0.1 > $1.1 }).prefix(8)
+        for (idx, _) in top {
+            let p = points[idx]
+            let label = "≈ \(TimelinePointBuilder.formatHMS(p.startSeconds))–\(TimelinePointBuilder.formatHMS(p.endSeconds))"
+            var tags: [String] = []
+            if p.conflictWordsCount >= 3 { tags.append(l10n.t("conflict", ru: "конфликт")) }
+            if p.negationsCount >= 6 { tags.append(l10n.t("negations", ru: "отрицания")) }
+            if p.pausesCount >= 3 { tags.append(l10n.t("pauses", ru: "паузы")) }
+
+            out.append(
+                TimelineHighlight(
+                    timeLabel: label,
+                    title: l10n.t("High intensity segment", ru: "Участок высокой напряженности"),
+                    snippet: p.snippet,
+                    tags: tags,
+                    seekSeconds: p.startSeconds
+                )
+            )
+        }
+
+        // De-duplicate by timeLabel+title
+        var seen = Set<String>()
+        out = out.filter {
+            let k = "\($0.timeLabel)|\($0.title)"
+            if seen.contains(k) { return false }
+            seen.insert(k)
+            return true
+        }
+
+        return out
     }
 }

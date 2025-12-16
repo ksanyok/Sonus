@@ -13,7 +13,7 @@ struct MainWindow: View {
             NavigationStack(path: $navigationPath) {
                 switch selectedSidebarItem {
                 case .record:
-                    RecordView(viewModel: viewModel, recorder: viewModel.audioRecorder)
+                    RecordView(viewModel: viewModel, recorder: viewModel.audioRecorder, sidebarSelection: $selectedSidebarItem)
                 case .history:
                     HistoryView(viewModel: viewModel) { session in
                         navigationPath.append(session.id)

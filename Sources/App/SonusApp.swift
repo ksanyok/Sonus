@@ -28,6 +28,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleMiniWindow()
         }
     }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
     
     func toggleMiniWindow() {
         DispatchQueue.main.async {
