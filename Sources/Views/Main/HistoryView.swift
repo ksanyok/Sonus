@@ -39,7 +39,10 @@ struct HistoryView: View {
                 LazyVStack(spacing: 16) {
                     ForEach(filteredSessions) { session in
                         NavigationLink(value: session) {
-                            SessionCard(session: session, onAnalyze: {
+                            SessionCard(session: session,
+                                        processingStatus: viewModel.processingStatus[session.id],
+                                        processingProgress: viewModel.processingProgress[session.id],
+                                        onAnalyze: {
                                 viewModel.processSession(session)
                             }, onDelete: {
                                 viewModel.deleteSession(session)
@@ -97,6 +100,8 @@ struct CategoryPill: View {
 
 struct SessionCard: View {
     let session: Session
+    let processingStatus: String?
+    let processingProgress: Double?
     let onAnalyze: () -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
@@ -148,12 +153,27 @@ struct SessionCard: View {
                     .background(scoreColor(analysis.score).opacity(0.1))
                     .cornerRadius(8)
                 } else {
-                    Text(session.isProcessing ? "Processing..." : "Not analyzed")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(6)
+                    if session.isProcessing {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Text(processingStatus ?? "Обработка…")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            if let p = processingProgress {
+                                ProgressView(value: p)
+                                    .frame(width: 120)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.gray.opacity(0.08))
+                        .cornerRadius(10)
+                    } else {
+                        Text("Not analyzed")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(6)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(6)
+                    }
                 }
                 HStack(spacing: 8) {
                     Button("Analyze") { onAnalyze() }

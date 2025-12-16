@@ -30,24 +30,24 @@ class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func startRecording() throws -> String {
         let filename = UUID().uuidString + ".m4a"
         let audioURL = PersistenceService.shared.getAudioURL(for: filename)
-        
+
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: 12000,
             AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
-        
+
         do {
             audioRecorder = try AVAudioRecorder(url: audioURL, settings: settings)
             audioRecorder?.delegate = self
             audioRecorder?.isMeteringEnabled = true
             audioRecorder?.record()
-            
+
             isRecording = true
             currentFilename = filename
             recordingDuration = 0
-            
+
             startTimer()
             return filename
         } catch {
@@ -57,16 +57,16 @@ class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     func stopRecording() -> (filename: String, duration: TimeInterval)? {
         guard let recorder = audioRecorder, recorder.isRecording else { return nil }
-        
+
         let duration = recorder.currentTime
         recorder.stop()
-        
+
         stopTimer()
         isRecording = false
-        
+
         guard let filename = currentFilename else { return nil }
         currentFilename = nil
-        
+
         return (filename, duration)
     }
     
@@ -74,12 +74,12 @@ class AudioRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
         // Update UI more frequently for smoother animation (approx 60 FPS)
         timer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
             guard let self = self, let recorder = self.audioRecorder else { return }
-            
+
             recorder.updateMeters()
             let currentTime = recorder.currentTime
             let level = recorder.averagePower(forChannel: 0)
             let normalizedLevel = max(0, (level + 60) / 60) // Normalize -160..0 to 0..1 with boost
-            
+
             DispatchQueue.main.async {
                 self.recordingDuration = currentTime
                 if self.audioLevels.count >= 30 {

@@ -14,11 +14,15 @@ class AppViewModel: ObservableObject {
     @Published var hints: [HintItem] = []
     @Published var currentHintIndex: Int = 0
     @Published var engagement: Double = 0.7 // 0..1, влияет на цвет пузыря
+
+    @Published var processingStatus: [UUID: String] = [:]
+    @Published var processingProgress: [UUID: Double] = [:]
     
     // Dependencies
     private let persistence = PersistenceService.shared
     let audioRecorder = AudioRecorder()
     private let openAI = OpenAIClient.shared
+
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -81,18 +85,16 @@ class AppViewModel: ObservableObject {
             }
         }
     }
-    
-    func deleteSession(_ session: Session) {
-        if selectedSession == session {
-            selectedSession = nil
-        }
-        persistence.deleteSession(session)
-    }
 
     func saveSession(_ session: Session) {
         persistence.saveSession(session)
     }
-    
+
+    func deleteSession(_ session: Session) {
+        guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
+        deleteSessions(at: IndexSet(integer: index))
+    }
+
     func deleteSessions(at offsets: IndexSet) {
         // Check if selected session is being deleted
         offsets.forEach { index in
@@ -112,13 +114,21 @@ class AppViewModel: ObservableObject {
         var updatedSession = session
         updatedSession.isProcessing = true
         persistence.saveSession(updatedSession)
+
+        processingStatus[session.id] = "Подготовка…"
+        processingProgress[session.id] = 0
         
         Task {
             do {
                 let audioURL = persistence.getAudioURL(for: session.audioFilename)
                 
                 // 1. Transcribe
-                let transcript = try await openAI.transcribe(audioURL: audioURL)
+                let transcript = try await openAI.transcribe(audioURL: audioURL) { [weak self] progress, message in
+                    Task { @MainActor in
+                        self?.processingStatus[session.id] = message
+                        self?.processingProgress[session.id] = progress
+                    }
+                }
                 
                 // Update with transcript
                 updatedSession.transcript = transcript
@@ -126,15 +136,23 @@ class AppViewModel: ObservableObject {
                 persistence.saveSession(updatedSession)
                 
                 // 2. Analyze
+                self.processingStatus[session.id] = "Анализ (JSON)…"
+                self.processingProgress[session.id] = 0.92
                 let analysis = try await openAI.analyze(text: transcript)
                 
                 updatedSession.analysis = analysis
                 updatedSession.isProcessing = false
                 persistence.saveSession(updatedSession)
+
+                self.processingStatus[session.id] = nil
+                self.processingProgress[session.id] = nil
                 
             } catch {
                 updatedSession.isProcessing = false
                 persistence.saveSession(updatedSession)
+
+                self.processingStatus[session.id] = nil
+                self.processingProgress[session.id] = nil
                 
                 self.errorMessage = error.localizedDescription
                 self.showError = true

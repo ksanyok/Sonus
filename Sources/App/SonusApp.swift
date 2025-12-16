@@ -67,13 +67,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             hintWindowController = HintWindowController(viewModel: viewModel, statusItem: statusItem)
         }
 
-        // If нет подсказки — покажем заглушку
-        if viewModel.hints.isEmpty {
-            viewModel.showHint(
-                question: "Клиент спрашивает сроки?",
-                answer: "Скажите, что вернётесь с уточнённым сроком после оценки задачи и обсудите детали." )
-        }
-
         hintWindowController?.toggle()
     }
 

@@ -215,6 +215,200 @@ struct OverviewView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
             }
+
+            if let style = analysis.communicationStyle {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Стиль общения", systemImage: "quote.bubble")
+                        .font(.headline)
+
+                    if let formality = style.formality, !formality.isEmpty {
+                        HStack {
+                            Text("Формат")
+                            Spacer()
+                            Text(formality)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let pacing = style.pacing, !pacing.isEmpty {
+                        HStack {
+                            Text("Темп")
+                            Spacer()
+                            Text(pacing)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let structure = style.structure, !structure.isEmpty {
+                        HStack {
+                            Text("Структура")
+                            Spacer()
+                            Text(structure)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let conflict = style.conflictLevel {
+                        HStack {
+                            Text("Конфликтность")
+                            Spacer()
+                            Text("\(conflict)%")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let tone = style.tone, !tone.isEmpty {
+                        WrapChips(items: tone)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
+
+            if let client = analysis.client {
+                ParticipantProfileCard(title: "Клиент", profile: client)
+            }
+
+            if let others = analysis.otherParticipants, !others.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Другие собеседники", systemImage: "person.3")
+                        .font(.headline)
+                    ForEach(Array(others.enumerated()), id: \.offset) { _, p in
+                        ParticipantProfileRow(profile: p)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
+
+            if let insights = analysis.clientInsights {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Анализ клиента", systemImage: "person.text.rectangle")
+                        .font(.headline)
+
+                    if let s = insights.summary, !s.isEmpty {
+                        Text(s)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let goals = insights.goals, !goals.isEmpty {
+                        BulletListCard(title: "Цели", items: goals)
+                    }
+                    if let pains = insights.painPoints, !pains.isEmpty {
+                        BulletListCard(title: "Боли/проблемы", items: pains)
+                    }
+                    if let pr = insights.priorities, !pr.isEmpty {
+                        BulletListCard(title: "Приоритеты", items: pr)
+                    }
+                    if let budget = insights.budget, !budget.isEmpty {
+                        HStack {
+                            Text("Бюджет")
+                            Spacer()
+                            Text(budget).foregroundColor(.secondary)
+                        }
+                    }
+                    if let timeline = insights.timeline, !timeline.isEmpty {
+                        HStack {
+                            Text("Сроки")
+                            Spacer()
+                            Text(timeline).foregroundColor(.secondary)
+                        }
+                    }
+                    if let dm = insights.decisionMakers, !dm.isEmpty {
+                        BulletListCard(title: "ЛПР/участники решения", items: dm)
+                    }
+                    if let dp = insights.decisionProcess, !dp.isEmpty {
+                        HStack(alignment: .top) {
+                            Text("Процесс решения")
+                            Spacer()
+                            Text(dp)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                    if let sig = insights.buyingSignals, !sig.isEmpty {
+                        BulletListCard(title: "Сигналы интереса", items: sig)
+                    }
+                    if let risks = insights.risks, !risks.isEmpty {
+                        BulletListCard(title: "Риски", items: risks)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
+
+            if let entities = analysis.extractedEntities, entities.hasAnyData {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Извлечённые данные", systemImage: "tray.full")
+                        .font(.headline)
+
+                    if let companies = entities.companies, !companies.isEmpty {
+                        Text("Компании")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: companies)
+                    }
+                    if let people = entities.people, !people.isEmpty {
+                        Text("Люди")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: people)
+                    }
+                    if let products = entities.products, !products.isEmpty {
+                        Text("Продукты")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: products)
+                    }
+                    if let urls = entities.urls, !urls.isEmpty {
+                        Text("Ссылки")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: urls)
+                    }
+                    if let emails = entities.emails, !emails.isEmpty {
+                        Text("Email")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: emails)
+                    }
+                    if let phones = entities.phones, !phones.isEmpty {
+                        Text("Телефоны")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: phones)
+                    }
+                    if let dates = entities.dateMentions, !dates.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Даты/дедлайны")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            ForEach(Array(dates.enumerated()), id: \.offset) { _, d in
+                                HStack(alignment: .top) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 12))
+                                        .padding(.top, 2)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(d.text)
+                                        if let iso = d.isoDate, !iso.isEmpty {
+                                            Text(iso)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        if let ctx = d.context, !ctx.isEmpty {
+                                            Text(ctx)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
         }
     }
 }
@@ -285,7 +479,187 @@ struct DetailedAnalysisView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
             }
+
+            if !analysis.keyMoments.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Ключевые моменты", systemImage: "bookmark")
+                        .font(.headline)
+                    ForEach(Array(analysis.keyMoments.enumerated()), id: \.offset) { _, m in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                if let t = m.type, !t.isEmpty {
+                                    Text(t)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.gray.opacity(0.12))
+                                        .cornerRadius(8)
+                                }
+                                if let s = m.speaker, !s.isEmpty {
+                                    Text(s)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                if let th = m.timeHint, !th.isEmpty {
+                                    Text(th)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            Text(m.text)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(8)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
+
+            if !analysis.actionItems.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Задачи и дедлайны", systemImage: "checkmark.circle")
+                        .font(.headline)
+                    ForEach(Array(analysis.actionItems.enumerated()), id: \.offset) { _, item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(item.title)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            HStack(spacing: 10) {
+                                if let owner = item.owner, !owner.isEmpty {
+                                    Text(owner)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let due = item.dueDateISO, !due.isEmpty {
+                                    Text(due)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let pr = item.priority, !pr.isEmpty {
+                                    Text(pr)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            if let notes = item.notes, !notes.isEmpty {
+                                Text(notes)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(8)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
         }
+    }
+}
+
+private struct ParticipantProfileCard: View {
+    let title: String
+    let profile: ParticipantProfile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: "person.crop.circle")
+                .font(.headline)
+            ParticipantProfileRow(profile: profile)
+        }
+        .padding()
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(12)
+    }
+}
+
+private struct ParticipantProfileRow: View {
+    let profile: ParticipantProfile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let nameOrLabel = [profile.name, profile.label].compactMap({ $0 }).first, !nameOrLabel.isEmpty {
+                Text(nameOrLabel)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            if let role = profile.role, !role.isEmpty {
+                Text(role)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            if let company = profile.company, !company.isEmpty {
+                Text(company)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            if let title = profile.title, !title.isEmpty {
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            if let notes = profile.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            if let contact = profile.contact {
+                if let emails = contact.emails, !emails.isEmpty {
+                    WrapChips(items: emails)
+                }
+                if let phones = contact.phones, !phones.isEmpty {
+                    WrapChips(items: phones)
+                }
+                if let messengers = contact.messengers, !messengers.isEmpty {
+                    WrapChips(items: messengers)
+                }
+            }
+        }
+    }
+}
+
+private struct BulletListCard: View {
+    let title: String
+    let items: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            ForEach(items, id: \.self) { it in
+                HStack(alignment: .top) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 6))
+                        .padding(.top, 6)
+                    Text(it)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+}
+
+private extension ExtractedEntities {
+    var hasAnyData: Bool {
+        let hasStrings = (companies?.isEmpty == false)
+            || (people?.isEmpty == false)
+            || (products?.isEmpty == false)
+            || (locations?.isEmpty == false)
+            || (urls?.isEmpty == false)
+            || (emails?.isEmpty == false)
+            || (phones?.isEmpty == false)
+        let hasDates = (dateMentions?.isEmpty == false)
+        return hasStrings || hasDates
     }
 }
 

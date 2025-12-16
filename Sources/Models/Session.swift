@@ -81,6 +81,15 @@ struct Analysis: Codable, Equatable, Hashable {
     
     // Detailed criteria (optional for backward compatibility)
     var criteria: [EvaluationCriterion] = []
+
+    // Extended fields (optional; may be absent depending on transcript quality)
+    var communicationStyle: CommunicationStyle?
+    var client: ParticipantProfile?
+    var otherParticipants: [ParticipantProfile]?
+    var extractedEntities: ExtractedEntities?
+    var clientInsights: ClientInsights?
+    var keyMoments: [KeyMoment] = []
+    var actionItems: [ActionItem] = []
     
     init(summary: String,
          sentiment: String,
@@ -95,7 +104,14 @@ struct Analysis: Codable, Equatable, Hashable {
          nextSteps: [String],
          recommendations: [String],
          customerIntent: String,
-         criteria: [EvaluationCriterion] = []) {
+         criteria: [EvaluationCriterion] = [],
+         communicationStyle: CommunicationStyle? = nil,
+         client: ParticipantProfile? = nil,
+         otherParticipants: [ParticipantProfile]? = nil,
+         extractedEntities: ExtractedEntities? = nil,
+         clientInsights: ClientInsights? = nil,
+         keyMoments: [KeyMoment] = [],
+         actionItems: [ActionItem] = []) {
         self.summary = summary
         self.sentiment = sentiment
         self.score = score
@@ -110,6 +126,13 @@ struct Analysis: Codable, Equatable, Hashable {
         self.recommendations = recommendations
         self.customerIntent = customerIntent
         self.criteria = criteria
+        self.communicationStyle = communicationStyle
+        self.client = client
+        self.otherParticipants = otherParticipants
+        self.extractedEntities = extractedEntities
+        self.clientInsights = clientInsights
+        self.keyMoments = keyMoments
+        self.actionItems = actionItems
     }
     
     init(from decoder: Decoder) throws {
@@ -128,7 +151,85 @@ struct Analysis: Codable, Equatable, Hashable {
         recommendations = (try? c.decode([String].self, forKey: .recommendations)) ?? []
         customerIntent = (try? c.decode(String.self, forKey: .customerIntent)) ?? ""
         criteria = (try? c.decode([EvaluationCriterion].self, forKey: .criteria)) ?? []
+
+        communicationStyle = try? c.decode(CommunicationStyle.self, forKey: .communicationStyle)
+        client = try? c.decode(ParticipantProfile.self, forKey: .client)
+        otherParticipants = try? c.decode([ParticipantProfile].self, forKey: .otherParticipants)
+        extractedEntities = try? c.decode(ExtractedEntities.self, forKey: .extractedEntities)
+        clientInsights = try? c.decode(ClientInsights.self, forKey: .clientInsights)
+        keyMoments = (try? c.decode([KeyMoment].self, forKey: .keyMoments)) ?? []
+        actionItems = (try? c.decode([ActionItem].self, forKey: .actionItems)) ?? []
     }
+}
+
+struct ParticipantProfile: Codable, Equatable, Hashable {
+    var label: String?
+    var name: String?
+    var role: String?
+    var company: String?
+    var title: String?
+    var contact: ContactInfo?
+    var notes: String?
+    var confidence: Int? // 0-100
+}
+
+struct ContactInfo: Codable, Equatable, Hashable {
+    var emails: [String]?
+    var phones: [String]?
+    var messengers: [String]?
+}
+
+struct CommunicationStyle: Codable, Equatable, Hashable {
+    var formality: String? // "formal" | "neutral" | "informal"
+    var tone: [String]? // e.g. ["дружелюбный", "деловой"]
+    var pacing: String? // "fast" | "moderate" | "slow"
+    var structure: String? // "structured" | "mixed" | "chaotic"
+    var conflictLevel: Int? // 0-100
+}
+
+struct ExtractedEntities: Codable, Equatable, Hashable {
+    var companies: [String]?
+    var people: [String]?
+    var products: [String]?
+    var locations: [String]?
+    var urls: [String]?
+    var emails: [String]?
+    var phones: [String]?
+    var dateMentions: [DateMention]?
+}
+
+struct DateMention: Codable, Equatable, Hashable {
+    var text: String
+    var isoDate: String? // YYYY-MM-DD when confidently inferred
+    var context: String?
+}
+
+struct ClientInsights: Codable, Equatable, Hashable {
+    var summary: String?
+    var goals: [String]?
+    var painPoints: [String]?
+    var priorities: [String]?
+    var budget: String?
+    var timeline: String?
+    var decisionMakers: [String]?
+    var decisionProcess: String?
+    var buyingSignals: [String]?
+    var risks: [String]?
+}
+
+struct KeyMoment: Codable, Equatable, Hashable {
+    var speaker: String?
+    var text: String
+    var type: String? // e.g. "objection" | "agreement" | "requirement" | "deadline"
+    var timeHint: String? // e.g. "00:12:34" when possible
+}
+
+struct ActionItem: Codable, Equatable, Hashable {
+    var title: String
+    var owner: String? // "sales" | "client" | name
+    var dueDateISO: String? // YYYY-MM-DD
+    var priority: String? // "low" | "medium" | "high"
+    var notes: String?
 }
 
 struct EvaluationCriterion: Codable, Equatable, Hashable, Identifiable {
