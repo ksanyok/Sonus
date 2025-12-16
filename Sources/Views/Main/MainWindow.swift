@@ -3,17 +3,20 @@ import SwiftUI
 struct MainWindow: View {
     @ObservedObject var viewModel: AppViewModel
     @State private var selectedSidebarItem: SidebarItem? = .record
+    @State private var navigationPath: [Session] = []
     
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $selectedSidebarItem)
         } detail: {
-            NavigationStack {
+            NavigationStack(path: $navigationPath) {
                 switch selectedSidebarItem {
                 case .record:
                     RecordView(viewModel: viewModel, recorder: viewModel.audioRecorder)
                 case .history:
-                    HistoryView(viewModel: viewModel)
+                    HistoryView(viewModel: viewModel) { session in
+                        navigationPath.append(session)
+                    }
                 case .settings:
                     SettingsView()
                 case .none:

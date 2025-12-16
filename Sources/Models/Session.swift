@@ -68,6 +68,8 @@ struct Analysis: Codable, Equatable, Hashable {
     var score: Int // 0-100
     var participants: [String]
     var languages: [String]
+    var speakerCount: Int?
+    var stopWords: [String]?
     
     // New fields for sales analysis
     var engagementScore: Int // 0-100
@@ -85,6 +87,8 @@ struct Analysis: Codable, Equatable, Hashable {
          score: Int,
          participants: [String],
          languages: [String],
+         speakerCount: Int? = nil,
+         stopWords: [String]? = nil,
          engagementScore: Int,
          salesProbability: Int,
          objections: [String],
@@ -97,6 +101,8 @@ struct Analysis: Codable, Equatable, Hashable {
         self.score = score
         self.participants = participants
         self.languages = languages
+        self.speakerCount = speakerCount
+        self.stopWords = stopWords
         self.engagementScore = engagementScore
         self.salesProbability = salesProbability
         self.objections = objections
@@ -113,6 +119,8 @@ struct Analysis: Codable, Equatable, Hashable {
         score = (try? c.decode(Int.self, forKey: .score)) ?? 0
         participants = (try? c.decode([String].self, forKey: .participants)) ?? []
         languages = (try? c.decode([String].self, forKey: .languages)) ?? []
+        speakerCount = try? c.decode(Int.self, forKey: .speakerCount)
+        stopWords = try? c.decode([String].self, forKey: .stopWords)
         engagementScore = (try? c.decode(Int.self, forKey: .engagementScore)) ?? 0
         salesProbability = (try? c.decode(Int.self, forKey: .salesProbability)) ?? 0
         objections = (try? c.decode([String].self, forKey: .objections)) ?? []

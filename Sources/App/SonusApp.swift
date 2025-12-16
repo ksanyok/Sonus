@@ -5,6 +5,7 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     weak var viewModel: AppViewModel?
     private var statusItem: NSStatusItem?
+    private var hintWindowController: HintWindowController?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If another instance is already running, quit this one to avoid duplicates
@@ -46,6 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Sonus", action: #selector(openMainWindow), keyEquivalent: "")
         menu.addItem(withTitle: "Toggle Recording", action: #selector(toggleRecording), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Hints", action: #selector(toggleHints), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q")
         statusItem?.menu = menu
@@ -56,6 +58,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    @objc private func toggleHints() {
+        guard let viewModel else { return }
+        if hintWindowController == nil {
+            hintWindowController = HintWindowController(viewModel: viewModel, statusItem: statusItem)
+        }
+
+        // If нет подсказки — покажем заглушку
+        if viewModel.hints.isEmpty {
+            viewModel.showHint(
+                question: "Клиент спрашивает сроки?",
+                answer: "Скажите, что вернётесь с уточнённым сроком после оценки задачи и обсудите детали." )
+        }
+
+        hintWindowController?.toggle()
     }
     
     @objc private func toggleRecording() {

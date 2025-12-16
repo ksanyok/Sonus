@@ -11,6 +11,8 @@ class AppViewModel: ObservableObject {
     @Published var showError = false
     @Published var draftTitle: String = ""
     @Published var draftCategory: SessionCategory = .personal
+    @Published var hints: [HintItem] = []
+    @Published var currentHintIndex: Int = 0
     
     // Dependencies
     private let persistence = PersistenceService.shared
@@ -93,9 +95,8 @@ class AppViewModel: ObservableObject {
     }
     
     func processSession(_ session: Session) {
-        guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { return }
+        guard sessions.contains(where: { $0.id == session.id }) else { return }
         
-        // Update state to processing
         var updatedSession = session
         updatedSession.isProcessing = true
         persistence.saveSession(updatedSession)
@@ -128,4 +129,46 @@ class AppViewModel: ObservableObject {
             }
         }
     }
+
+    func showHint(question: String, answer: String) {
+        let newHint = HintItem(id: UUID(), question: question, answer: answer, createdAt: Date())
+        withAnimation(.spring()) {
+            hints.append(newHint)
+            if hints.count > 20 { hints.removeFirst() }
+            currentHintIndex = max(hints.count - 1, 0)
+        }
+    }
+
+    func clearHints() {
+        withAnimation(.easeInOut) {
+            hints.removeAll()
+            currentHintIndex = 0
+        }
+    }
+
+    var currentHint: HintItem? {
+        guard hints.indices.contains(currentHintIndex) else { return nil }
+        return hints[currentHintIndex]
+    }
+
+    func nextHint() {
+        guard !hints.isEmpty else { return }
+        withAnimation(.easeInOut) {
+            currentHintIndex = (currentHintIndex + 1) % hints.count
+        }
+    }
+
+    func previousHint() {
+        guard !hints.isEmpty else { return }
+        withAnimation(.easeInOut) {
+            currentHintIndex = (currentHintIndex - 1 + hints.count) % hints.count
+        }
+    }
+}
+
+struct HintItem: Identifiable, Equatable, Hashable {
+    let id: UUID
+    let question: String
+    let answer: String
+    let createdAt: Date
 }

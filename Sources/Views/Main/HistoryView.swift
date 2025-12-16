@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var viewModel: AppViewModel
+    var onSelect: ((Session) -> Void)? = nil
     @State private var selectedCategory: SessionCategory? = nil // nil means "All"
     @State private var showEditSheet: Bool = false
     @State private var editingSession: Session?
@@ -46,7 +47,12 @@ struct HistoryView: View {
                                 editingSession = session
                                 showEditSheet = true
                             })
+                            .contentShape(Rectangle())
                         }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            viewModel.selectedSession = session
+                            onSelect?(session)
+                        })
                         .buttonStyle(.plain)
                     }
                 }
@@ -55,7 +61,7 @@ struct HistoryView: View {
         }
         .navigationTitle("История")
         .background(Color(nsColor: .windowBackgroundColor))
-        .sheet(isPresented: $showEditSheet) {
+        .sheet(isPresented: $showEditSheet, onDismiss: { editingSession = nil }) {
             if let session = editingSession {
                 SessionEditSheet(session: session, viewModel: viewModel, isPresented: $showEditSheet)
             }
@@ -237,6 +243,9 @@ struct SessionEditSheet: View {
         updated.customTitle = title.isEmpty ? nil : title
         updated.category = category
         viewModel.saveSession(updated)
+        if viewModel.selectedSession?.id == updated.id {
+            viewModel.selectedSession = updated
+        }
         isPresented = false
     }
 }

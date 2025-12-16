@@ -43,6 +43,12 @@ class AudioPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
             startPlayback(audioURL: audioURL)
         }
     }
+
+    func seek(to time: TimeInterval) {
+        guard let player = audioPlayer else { return }
+        player.currentTime = time
+        currentTime = time
+    }
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         isPlaying = false

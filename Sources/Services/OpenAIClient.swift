@@ -76,6 +76,7 @@ class OpenAIClient {
         - sentiment: The overall sentiment (Positive, Neutral, Negative).
         - score: A sentiment score from 0 to 100.
         - participants: A list of inferred participant names or roles (e.g., "Speaker 1").
+        - speakerCount: Total number of distinct speakers detected.
         - languages: A list of languages detected in the conversation.
         - engagementScore: A score from 0 to 100 indicating how engaged the customer is.
         - salesProbability: A probability score from 0 to 100 indicating the likelihood of a sale.
@@ -83,6 +84,7 @@ class OpenAIClient {
         - nextSteps: A list of actionable next steps.
         - recommendations: Recommendations for the salesperson on how to improve or what to say next.
         - customerIntent: The customer's intent (e.g., "Buying", "Browsing", "Not Interested"). Determine if they are genuinely interested or just agreeing politely.
+        - stopWords: A list of filler/stop words detected (e.g., "uh", "um", "like").
         - criteria: An array of evaluation criteria. Each object should have:
             - name: Name of the criterion (e.g., "Greeting", "Needs Analysis", "Closing").
             - score: Score from 0 to 10.

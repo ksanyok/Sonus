@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SessionDetailView: View {
     let session: Session
@@ -10,11 +11,9 @@ struct SessionDetailView: View {
         VStack(spacing: 0) {
             // Header
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(session.title)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
+                        .font(.largeTitle).bold()
                     HStack(spacing: 8) {
                         Label(session.category.displayName, systemImage: session.category.icon)
                         Text("•")
@@ -25,17 +24,13 @@ struct SessionDetailView: View {
                     .foregroundColor(.secondary)
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Button("Analyze") {
-                            viewModel.processSession(session)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(session.isProcessing)
-                        Button("Delete", role: .destructive) {
-                            viewModel.deleteSession(session)
-                        }
-                        .buttonStyle(.bordered)
+                VStack(alignment: .trailing, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Button("Analyze") { viewModel.processSession(session) }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(session.isProcessing)
+                        Button("Delete", role: .destructive) { viewModel.deleteSession(session) }
+                            .buttonStyle(.bordered)
                     }
                     if session.isProcessing {
                         ProgressView("Processing...")
@@ -43,38 +38,41 @@ struct SessionDetailView: View {
                     }
                 }
             }
-            .padding()
-            .background(Color(nsColor: .windowBackgroundColor))
+            .padding(.horizontal)
+            .padding(.top, 16)
             
-            // Audio Player
-            VStack(spacing: 8) {
-                HStack {
-                    Button(action: {
-                        let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
-                        audioPlayer.togglePlayback(audioURL: url)
-                    }) {
-                        Image(systemName: audioPlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    VStack(spacing: 4) {
-                        ProgressView(value: audioPlayer.currentTime, total: audioPlayer.duration > 0 ? audioPlayer.duration : session.duration)
-                            .tint(.accentColor)
-                        
-                        HStack {
-                            Text(formatDuration(audioPlayer.currentTime))
-                            Spacer()
-                            Text(formatDuration(audioPlayer.duration > 0 ? audioPlayer.duration : session.duration))
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            // Audio Player card
+            HStack(spacing: 16) {
+                Button(action: {
+                    let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
+                    audioPlayer.togglePlayback(audioURL: url)
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 72, height: 72)
+                        Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title)
+                            .foregroundColor(.white)
                     }
                 }
+                .buttonStyle(.plain)
+                
+                VStack(spacing: 6) {
+                    Slider(value: playbackProgress)
+                    HStack {
+                        Text(formatDuration(audioPlayer.currentTime)).foregroundColor(.secondary)
+                        Spacer()
+                        Text(formatDuration(displayDuration)).foregroundColor(.secondary)
+                    }
+                    .font(.caption)
+                }
+                .padding(.vertical, 8)
             }
             .padding()
             .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(14)
+            .padding(.horizontal)
             
             // Content
             if let analysis = session.analysis {
@@ -113,6 +111,21 @@ struct SessionDetailView: View {
         let seconds = Int(duration) % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
+
+    private var displayDuration: TimeInterval {
+        let effectiveDuration = audioPlayer.duration > 0 ? audioPlayer.duration : session.duration
+        return effectiveDuration > 0 ? effectiveDuration : 0
+    }
+
+    private var playbackProgress: Binding<Double> {
+        Binding(get: {
+            guard displayDuration > 0 else { return 0 }
+            return audioPlayer.currentTime / displayDuration
+        }, set: { ratio in
+            guard displayDuration > 0 else { return }
+            audioPlayer.seek(to: ratio * displayDuration)
+        })
+    }
 }
 
 struct OverviewView: View {
@@ -137,6 +150,38 @@ struct OverviewView: View {
                 MetricCard(title: "Score", value: "\(analysis.score)%", icon: "chart.bar.fill", color: .blue)
                 MetricCard(title: "Sentiment", value: analysis.sentiment, icon: "face.smiling", color: .green)
                 MetricCard(title: "Engagement", value: "\(analysis.engagementScore)%", icon: "person.2.wave.2.fill", color: .orange)
+            }
+            
+            // Speakers / Languages
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Speakers", systemImage: "person.3.fill")
+                    Spacer()
+                    Text("\(analysis.speakerCount ?? analysis.participants.count) participant(s)")
+                        .foregroundColor(.secondary)
+                }
+                WrapChips(items: analysis.participants)
+            }
+            .padding()
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(12)
+            
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Languages", systemImage: "globe")
+                WrapChips(items: analysis.languages)
+            }
+            .padding()
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(12)
+            
+            if let stop = analysis.stopWords, !stop.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Stop words / fillers", systemImage: "ellipsis.message")
+                    WrapChips(items: stop)
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
             }
             
             // Intent
@@ -252,5 +297,77 @@ struct MetricCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
+    }
+}
+
+struct WrapChips: View {
+    let items: [String]
+    
+    var body: some View {
+        FlexibleView(data: items, spacing: 8, alignment: .leading) { item in
+            Text(item)
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(10)
+        }
+    }
+}
+
+// Simple flexible wrap layout
+struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: Hashable {
+    let data: Data
+    let spacing: CGFloat
+    let alignment: HorizontalAlignment
+    let content: (Data.Element) -> Content
+    
+    init(data: Data, spacing: CGFloat, alignment: HorizontalAlignment, @ViewBuilder content: @escaping (Data.Element) -> Content) {
+        self.data = data
+        self.spacing = spacing
+        self.alignment = alignment
+        self.content = content
+    }
+    
+    var body: some View {
+        GeometryReader { geo in
+            let rows = buildRows(for: geo.size.width)
+            VStack(alignment: alignment, spacing: spacing) {
+                ForEach(rows.indices, id: \.self) { row in
+                    HStack(spacing: spacing) {
+                        ForEach(rows[row], id: \.self) { element in
+                            content(element)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
+    private func buildRows(for availableWidth: CGFloat) -> [[Data.Element]] {
+        var rows: [[Data.Element]] = [[]]
+        var currentWidth: CGFloat = 0
+        for element in data {
+            let w = estimateWidth(for: element)
+            if currentWidth + w + spacing > availableWidth {
+                rows.append([element])
+                currentWidth = w + spacing
+            } else {
+                if rows[rows.count - 1].isEmpty {
+                    rows[rows.count - 1].append(element)
+                } else {
+                    rows[rows.count - 1].append(element)
+                }
+                currentWidth += w + spacing
+            }
+        }
+        return rows
+    }
+    
+    private func estimateWidth(for element: Data.Element) -> CGFloat {
+        let attr = [NSAttributedString.Key.font: NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .small))]
+        let size = (String(describing: element) as NSString).size(withAttributes: attr)
+        return size.width + 20 // padding used in chip
     }
 }
