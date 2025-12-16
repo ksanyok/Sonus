@@ -149,12 +149,25 @@ struct UnifiedPlayerView: View {
     
     private func parseTimeHint(_ hint: String?) -> TimeInterval? {
         guard let hint = hint, !hint.isEmpty else { return nil }
-        let parts = hint.split(separator: ":").map { Double($0) ?? 0 }
+        
+        // Try MM:SS or HH:MM:SS
+        let parts = hint.split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         if parts.count == 3 {
             return parts[0] * 3600 + parts[1] * 60 + parts[2]
         } else if parts.count == 2 {
             return parts[0] * 60 + parts[1]
         }
+        
+        // Try "10m 5s" or "10:05" with text
+        // Simple regex-like approach
+        let range = NSRange(location: 0, length: hint.utf16.count)
+        let regex = try? NSRegularExpression(pattern: "(\\d+)\\s*m\\s*(\\d+)?", options: .caseInsensitive)
+        if let match = regex?.firstMatch(in: hint, options: [], range: range) {
+            let minStr = (hint as NSString).substring(with: match.range(at: 1))
+            let secStr = match.range(at: 2).location != NSNotFound ? (hint as NSString).substring(with: match.range(at: 2)) : "0"
+            return (Double(minStr) ?? 0) * 60 + (Double(secStr) ?? 0)
+        }
+        
         return nil
     }
 }

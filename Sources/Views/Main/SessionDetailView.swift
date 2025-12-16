@@ -13,21 +13,23 @@ struct SessionDetailView: View {
     }
 
     @State private var selectedTab: DetailTab = .overview
+    @State private var isExporting = false
 
     enum DetailTab: String, CaseIterable {
         case overview = "Overview"
         case analysis = "Analysis"
+        case speakers = "Speakers"
         case transcript = "Transcript"
         case actions = "Actions"
     }
 
     var body: some View {
-        Group {
+        ZStack {
             if let session {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Header
-                        SessionHeaderView(session: session, viewModel: viewModel)
+                        SessionHeaderView(session: session, viewModel: viewModel, isExporting: $isExporting)
                             .padding(.horizontal)
                             .padding(.top, 16)
 
@@ -53,6 +55,8 @@ struct SessionDetailView: View {
                                     OverviewGrid(analysis: analysis)
                                 case .analysis:
                                     DetailedAnalysisView(analysis: analysis)
+                                case .speakers:
+                                    SpeakerInsightsView(insights: analysis.speakerInsights)
                                 case .transcript:
                                     TranscriptView(transcript: session.transcript)
                                 case .actions:
@@ -70,6 +74,31 @@ struct SessionDetailView: View {
                     .padding(.bottom, 40)
                 }
                 .background(Color(nsColor: .windowBackgroundColor))
+                
+                // Overlays
+                if isExporting {
+                    LoadingOverlay(message: l10n.t("Generating PDF Report...", ru: "Создание PDF отчета..."))
+                }
+                
+                if session.isProcessing {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(viewModel.processingStatus[session.id] ?? l10n.t("Analyzing...", ru: "Анализ..."))
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial)
+                        .cornerRadius(20)
+                        .shadow(radius: 5)
+                        .padding(.bottom, 20)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             } else {
                 VStack {
                     Spacer()
@@ -86,6 +115,7 @@ struct SessionDetailView: View {
         switch tab {
         case .overview: return "Обзор"
         case .analysis: return "Анализ"
+        case .speakers: return "Собеседники"
         case .transcript: return "Транскрипт"
         case .actions: return "Действия"
         }
@@ -95,6 +125,7 @@ struct SessionDetailView: View {
 struct SessionHeaderView: View {
     let session: Session
     @ObservedObject var viewModel: AppViewModel
+    @Binding var isExporting: Bool
     @EnvironmentObject private var l10n: LocalizationService
 
     private func needsAnalysisUpdate(_ session: Session) -> Bool {
@@ -166,16 +197,18 @@ struct SessionHeaderView: View {
                 HStack(spacing: 10) {
                     if session.analysis != nil {
                         Button(action: {
-                            PDFExportService.shared.exportPDF(for: session) { url in
-                                if let url = url {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            }
+                            exportPDF(session: session)
                         }) {
-                            Image(systemName: "square.and.arrow.up")
+                            if isExporting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "square.and.arrow.up")
+                            }
                         }
                         .buttonStyle(.bordered)
                         .help(l10n.t("Export PDF", ru: "Экспорт PDF"))
+                        .disabled(isExporting)
                     }
                     
                     AnalyzeActionButton(
@@ -201,6 +234,34 @@ struct SessionHeaderView: View {
                             .controlSize(.small)
                     }
                 }
+            }
+        }
+    }
+    
+    
+    private func exportPDF(session: Session) {
+        isExporting = true
+        
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.pdf]
+        savePanel.canCreateDirectories = true
+        savePanel.isExtensionHidden = false
+        savePanel.title = l10n.t("Export Report", ru: "Экспорт отчета")
+        savePanel.message = l10n.t("Choose a location to save the PDF report.", ru: "Выберите место для сохранения PDF отчета.")
+        savePanel.nameFieldStringValue = "Report_\(session.date.formatted(date: .numeric, time: .omitted)).pdf"
+        
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                PDFExportService.shared.exportPDF(for: session, to: url) { success in
+                    DispatchQueue.main.async {
+                        isExporting = false
+                        if success {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            } else {
+                isExporting = false
             }
         }
     }
