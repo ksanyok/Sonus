@@ -4,6 +4,7 @@ import AppKit
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     weak var viewModel: AppViewModel?
+    weak var l10n: LocalizationService?
     private var statusItem: NSStatusItem?
     private var hintWindowController: HintWindowController?
     
@@ -45,13 +46,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
         }
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open Sonus", action: #selector(openMainWindow), keyEquivalent: "")
-        menu.addItem(withTitle: "Toggle Recording", action: #selector(toggleRecording), keyEquivalent: "")
-        menu.addItem(withTitle: "Show Hints", action: #selector(toggleHints), keyEquivalent: "")
-        menu.addItem(withTitle: "Simulate Live Hint", action: #selector(simulateHint), keyEquivalent: "")
+        menu.addItem(withTitle: t("Open Sonus", "Открыть Sonus"), action: #selector(openMainWindow), keyEquivalent: "")
+        menu.addItem(withTitle: t("Toggle Recording", "Переключить запись"), action: #selector(toggleRecording), keyEquivalent: "")
+        menu.addItem(withTitle: t("Show Hints", "Показать подсказки"), action: #selector(toggleHints), keyEquivalent: "")
+        menu.addItem(withTitle: t("Simulate Live Hint", "Симулировать подсказку"), action: #selector(simulateHint), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: t("Quit", "Выйти"), action: #selector(quit), keyEquivalent: "q")
         statusItem?.menu = menu
+    }
+
+    private func t(_ en: String, _ ru: String) -> String {
+        let saved = UserDefaults.standard.string(forKey: LocalizationService.storageKey)
+        let lang = AppLanguage(rawValue: saved ?? "en") ?? .en
+        return lang == .ru ? ru : en
     }
     
     @objc private func openMainWindow() {
@@ -64,7 +71,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleHints() {
         guard let viewModel else { return }
         if hintWindowController == nil {
-            hintWindowController = HintWindowController(viewModel: viewModel, statusItem: statusItem)
+            let localization = l10n ?? LocalizationService()
+            hintWindowController = HintWindowController(viewModel: viewModel, l10n: localization, statusItem: statusItem)
         }
 
         hintWindowController?.toggle()
@@ -108,19 +116,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct SonusApp: App {
     @StateObject var viewModel = AppViewModel()
+    @StateObject private var l10n = LocalizationService()
     @Environment(\.openWindow) var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
         WindowGroup("Sonus", id: "main") {
             MainWindow(viewModel: viewModel)
+                .environmentObject(l10n)
+                .environment(\.locale, l10n.locale)
                 .onAppear {
                     appDelegate.viewModel = viewModel
+                    appDelegate.l10n = l10n
                 }
         }
         .commands {
-            CommandMenu("Recording") {
-                Button("Toggle Recording") {
+            CommandMenu(l10n.t("Recording", ru: "Запись")) {
+                Button(l10n.t("Toggle Recording", ru: "Переключить запись")) {
                     if viewModel.audioRecorder.isRecording {
                         viewModel.stopRecording()
                     } else {
@@ -129,7 +141,7 @@ struct SonusApp: App {
                 }
                 .keyboardShortcut("R", modifiers: [.command, .shift])
                 
-                Button("Toggle Mini Window") {
+                Button(l10n.t("Toggle Mini Window", ru: "Мини-окно")) {
                     openWindow(id: "mini")
                 }
                 .keyboardShortcut("M", modifiers: [.command, .shift])
@@ -138,6 +150,8 @@ struct SonusApp: App {
         
         Window("Mini Recorder", id: "mini") {
             MiniWindow(viewModel: viewModel, recorder: viewModel.audioRecorder)
+                .environmentObject(l10n)
+                .environment(\.locale, l10n.locale)
                 .onAppear {
                     // Hack to make window always on top and transparent title bar
                     for window in NSApplication.shared.windows {

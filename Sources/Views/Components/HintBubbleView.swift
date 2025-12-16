@@ -3,6 +3,7 @@ import AppKit
 
 struct HintBubbleView: View {
     @ObservedObject var viewModel: AppViewModel
+    @EnvironmentObject var l10n: LocalizationService
 
     var body: some View {
         ZStack {
@@ -12,7 +13,7 @@ struct HintBubbleView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    Text("Подсказки")
+                    Text(l10n.t("Hints", ru: "Подсказки"))
                         .font(.headline)
                         .foregroundColor(.white.opacity(0.95))
                     Capsule()
@@ -26,7 +27,7 @@ struct HintBubbleView: View {
                                     .opacity(0.9)
                                     .scaleEffect(1.2)
                                     .animation(.easeInOut(duration: 1).repeatForever(), value: viewModel.currentHint?.id)
-                                Text("Live анализ")
+                                Text(l10n.t("Live", ru: "Live"))
                                     .font(.caption)
                                     .foregroundColor(.white)
                             }
@@ -45,7 +46,7 @@ struct HintBubbleView: View {
                 if let hint = viewModel.currentHint {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Вопрос")
+                            Text(l10n.t("Question", ru: "Вопрос"))
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.8))
                             Text(hint.question)
@@ -56,7 +57,7 @@ struct HintBubbleView: View {
                                 .background(Color.white.opacity(0.08))
                                 .cornerRadius(10)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text("Ответ")
+                            Text(l10n.t("Answer", ru: "Ответ"))
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.8))
                             Text(hint.answer)
@@ -72,11 +73,26 @@ struct HintBubbleView: View {
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.currentHint?.id)
                     }
                 } else {
-                    Text("Пока нет подсказок")
-                        .font(.callout)
-                        .foregroundColor(.white.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(l10n.t("No hints yet", ru: "Пока нет подсказок"))
+                            .font(.callout)
+                            .foregroundColor(.white.opacity(0.85))
+                        if !viewModel.hasAPIKey {
+                            Text(l10n.t("Add an API key in Settings to enable live analysis.", ru: "Добавьте API ключ в настройках — без него live анализ не работает."))
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        } else if viewModel.isRecording {
+                            Text(l10n.t("Recording: first hint usually appears in 10–20 seconds.", ru: "Идёт запись: ждём первую подсказку (обычно 10–20 секунд)."))
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        } else {
+                            Text(l10n.t("Start recording to get real-time hints.", ru: "Запустите запись — подсказки будут появляться в реальном времени."))
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
                 }
 
                 HStack(spacing: 12) {
@@ -99,7 +115,7 @@ struct HintBubbleView: View {
                     Spacer()
 
                     Button(action: copyHint) {
-                        Label("Копировать", systemImage: "doc.on.doc")
+                        Label(l10n.t("Copy", ru: "Копировать"), systemImage: "doc.on.doc")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.white.opacity(0.22))
@@ -135,11 +151,12 @@ struct HintBubbleView: View {
 // Толстая полоса вовлечённости с подсказкой цвета
 struct EngagementBar: View {
     let value: Double
+    @EnvironmentObject private var l10n: LocalizationService
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Вовлечённость")
+                Text(l10n.t("Engagement", ru: "Вовлечённость"))
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.8))
                 Spacer()

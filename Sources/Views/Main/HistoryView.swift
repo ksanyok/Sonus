@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var viewModel: AppViewModel
+    @EnvironmentObject private var l10n: LocalizationService
     var onSelect: ((Session) -> Void)? = nil
     @State private var selectedCategory: SessionCategory? = nil // nil means "All"
     @State private var showEditSheet: Bool = false
@@ -20,12 +21,12 @@ struct HistoryView: View {
             // Categories Header
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    CategoryPill(title: "Все", icon: "tray.full.fill", isSelected: selectedCategory == nil) {
+                    CategoryPill(title: l10n.t("All", ru: "Все"), icon: "tray.full.fill", isSelected: selectedCategory == nil) {
                         withAnimation { selectedCategory = nil }
                     }
                     
                     ForEach(SessionCategory.allCases) { category in
-                        CategoryPill(title: category.displayName, icon: category.icon, isSelected: selectedCategory == category) {
+                        CategoryPill(title: l10n.t(category.displayNameEn, ru: category.displayNameRu), icon: category.icon, isSelected: selectedCategory == category) {
                             withAnimation { selectedCategory = category }
                         }
                     }
@@ -38,7 +39,7 @@ struct HistoryView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     ForEach(filteredSessions) { session in
-                        NavigationLink(value: session) {
+                        NavigationLink(value: session.id) {
                             SessionCard(session: session,
                                         processingStatus: viewModel.processingStatus[session.id],
                                         processingProgress: viewModel.processingProgress[session.id],
@@ -62,7 +63,7 @@ struct HistoryView: View {
                 .padding()
             }
         }
-        .navigationTitle("История")
+        .navigationTitle(l10n.t("History", ru: "История"))
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $showEditSheet, onDismiss: { editingSession = nil }) {
             if let session = editingSession {
@@ -105,6 +106,7 @@ struct SessionCard: View {
     let onAnalyze: () -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
+    @EnvironmentObject private var l10n: LocalizationService
     @State private var isHovering = false
     
     var body: some View {
@@ -121,9 +123,15 @@ struct SessionCard: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(session.title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                if let customTitle = session.customTitle, !customTitle.isEmpty {
+                    Text(customTitle)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                } else {
+                    Text(session.date, format: .dateTime.year().month().day().hour().minute())
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                }
                 
                 HStack {
                     Text(session.date.formatted(date: .abbreviated, time: .shortened))
@@ -155,7 +163,7 @@ struct SessionCard: View {
                 } else {
                     if session.isProcessing {
                         VStack(alignment: .trailing, spacing: 6) {
-                            Text(processingStatus ?? "Обработка…")
+                            Text(processingStatus ?? l10n.t("Processing…", ru: "Обработка…"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             if let p = processingProgress {
@@ -167,7 +175,7 @@ struct SessionCard: View {
                         .background(Color.gray.opacity(0.08))
                         .cornerRadius(10)
                     } else {
-                        Text("Not analyzed")
+                        Text(l10n.t("Not analyzed", ru: "Не проанализировано"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .padding(6)
@@ -176,13 +184,13 @@ struct SessionCard: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Button("Analyze") { onAnalyze() }
+                    Button(l10n.t("Analyze", ru: "Анализ")) { onAnalyze() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                    Button("Edit") { onEdit() }
+                    Button(l10n.t("Edit", ru: "Правка")) { onEdit() }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                    Button(role: .destructive) { onDelete() } label: { Text("Delete") }
+                    Button(role: .destructive) { onDelete() } label: { Text(l10n.t("Delete", ru: "Удалить")) }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }
@@ -222,32 +230,33 @@ struct SessionEditSheet: View {
     let session: Session
     @ObservedObject var viewModel: AppViewModel
     @Binding var isPresented: Bool
+    @EnvironmentObject private var l10n: LocalizationService
     @State private var title: String = ""
     @State private var category: SessionCategory = .personal
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Редактировать запись")
+            Text(l10n.t("Edit session", ru: "Редактировать запись"))
                 .font(.title2)
                 .bold()
-            TextField("Название", text: $title)
+            TextField(l10n.t("Title", ru: "Название"), text: $title)
                 .textFieldStyle(.roundedBorder)
-            Picker("Категория", selection: $category) {
+            Picker(l10n.t("Category", ru: "Категория"), selection: $category) {
                 ForEach(SessionCategory.allCases) { cat in
                     HStack {
                         Image(systemName: cat.icon)
-                        Text(cat.displayName)
+                        Text(l10n.t(cat.displayNameEn, ru: cat.displayNameRu))
                     }.tag(cat)
                 }
             }
             .pickerStyle(.menu)
             HStack {
                 Spacer()
-                Button("Сохранить") {
+                Button(l10n.t("Save", ru: "Сохранить")) {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
-                Button("Отмена") { isPresented = false }
+                Button(l10n.t("Cancel", ru: "Отмена")) { isPresented = false }
             }
         }
         .padding()

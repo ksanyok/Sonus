@@ -3,6 +3,7 @@ import SwiftUI
 struct MiniWindow: View {
     @ObservedObject var viewModel: AppViewModel
     @ObservedObject var recorder: AudioRecorder
+    @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
         VStack(spacing: 12) {
@@ -34,7 +35,7 @@ struct MiniWindow: View {
                 }
                 .buttonStyle(.plain)
                 
-                Text("Ready")
+                Text(l10n.t("Ready", ru: "Готов"))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

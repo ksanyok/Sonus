@@ -2,8 +2,9 @@ import SwiftUI
 
 struct MainWindow: View {
     @ObservedObject var viewModel: AppViewModel
+    @EnvironmentObject private var l10n: LocalizationService
     @State private var selectedSidebarItem: SidebarItem? = .record
-    @State private var navigationPath: [Session] = []
+    @State private var navigationPath: [UUID] = []
     
     var body: some View {
         NavigationSplitView {
@@ -15,23 +16,23 @@ struct MainWindow: View {
                     RecordView(viewModel: viewModel, recorder: viewModel.audioRecorder)
                 case .history:
                     HistoryView(viewModel: viewModel) { session in
-                        navigationPath.append(session)
+                        navigationPath.append(session.id)
                     }
                 case .settings:
                     SettingsView()
                 case .none:
-                    Text("Select an item")
+                    Text(l10n.t("Select an item", ru: "Выберите раздел"))
                 }
             }
-            .navigationDestination(for: Session.self) { session in
-                SessionDetailView(session: session, viewModel: viewModel)
+            .navigationDestination(for: UUID.self) { id in
+                SessionDetailView(sessionID: id, viewModel: viewModel)
             }
         }
         .frame(minWidth: 900, minHeight: 600)
-        .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK", role: .cancel) { }
+        .alert(l10n.t("Error", ru: "Ошибка"), isPresented: $viewModel.showError) {
+            Button(l10n.t("OK", ru: "ОК"), role: .cancel) { }
         } message: {
-            Text(viewModel.errorMessage ?? "Unknown error")
+            Text(viewModel.errorMessage ?? l10n.t("Unknown error", ru: "Неизвестная ошибка"))
         }
     }
 }

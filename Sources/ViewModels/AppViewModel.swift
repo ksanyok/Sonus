@@ -15,6 +15,8 @@ class AppViewModel: ObservableObject {
     @Published var currentHintIndex: Int = 0
     @Published var engagement: Double = 0.7 // 0..1, влияет на цвет пузыря
 
+    @Published var isRecording: Bool = false
+
     @Published var processingStatus: [UUID: String] = [:]
     @Published var processingProgress: [UUID: Double] = [:]
     
@@ -25,11 +27,21 @@ class AppViewModel: ObservableObject {
 
     
     private var cancellables = Set<AnyCancellable>()
+
+    private var liveTranscriptBuffer: String = ""
+    private var liveAnalysisTask: Task<Void, Never>?
+    private var isLivePipelineActive: Bool = false
+    private var pendingLiveChunks: [URL] = []
     
     init() {
         // Bind sessions from persistence
         persistence.$sessions
             .assign(to: \.sessions, on: self)
+            .store(in: &cancellables)
+
+        audioRecorder.$isRecording
+            .receive(on: RunLoop.main)
+            .assign(to: \.isRecording, on: self)
             .store(in: &cancellables)
 
         // Подписка на внешние подсказки (для будущих realtime моделей)
@@ -43,11 +55,16 @@ class AppViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    var hasAPIKey: Bool {
+        KeychainService.shared.load() != nil
+    }
     
     func startRecording() {
         Task {
             if await audioRecorder.requestPermission() {
                 do {
+                    startLivePipelineIfNeeded()
                     _ = try audioRecorder.startRecording()
                 } catch {
                     self.errorMessage = "Failed to start recording: \(error.localizedDescription)"
@@ -82,6 +99,77 @@ class AppViewModel: ObservableObject {
             // For now, user manually triggers or we trigger if key is present.
             if KeychainService.shared.load() != nil {
                 processSession(newSession)
+            }
+        }
+
+        stopLivePipeline()
+    }
+
+    private func startLivePipelineIfNeeded() {
+        guard !isLivePipelineActive else { return }
+        isLivePipelineActive = true
+        liveTranscriptBuffer = ""
+        pendingLiveChunks.removeAll()
+
+        audioRecorder.onChunkReady = { [weak self] chunkURL in
+            guard let self else { return }
+            self.enqueueLiveChunk(url: chunkURL)
+        }
+    }
+
+    private func stopLivePipeline() {
+        isLivePipelineActive = false
+        audioRecorder.onChunkReady = nil
+        liveAnalysisTask?.cancel()
+        liveAnalysisTask = nil
+        pendingLiveChunks.removeAll()
+    }
+
+    private func enqueueLiveChunk(url: URL) {
+        pendingLiveChunks.append(url)
+        drainLiveQueueIfNeeded()
+    }
+
+    private func drainLiveQueueIfNeeded() {
+        guard liveAnalysisTask == nil else { return }
+        guard isLivePipelineActive else {
+            pendingLiveChunks.removeAll()
+            return
+        }
+        guard !pendingLiveChunks.isEmpty else { return }
+
+        let url = pendingLiveChunks.removeFirst()
+        liveAnalysisTask = Task {
+            defer {
+                try? FileManager.default.removeItem(at: url)
+                Task { @MainActor in
+                    self.liveAnalysisTask = nil
+                    self.drainLiveQueueIfNeeded()
+                }
+            }
+
+            guard KeychainService.shared.load() != nil else { return }
+            guard audioRecorder.isRecording else { return }
+
+            do {
+                let piece = try await openAI.transcribe(audioURL: url)
+                if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+
+                liveTranscriptBuffer += "\n" + piece
+                if liveTranscriptBuffer.count > 2500 {
+                    liveTranscriptBuffer = String(liveTranscriptBuffer.suffix(2500))
+                }
+
+                let hint = try await openAI.liveHint(context: liveTranscriptBuffer)
+                let q = hint.question.trimmingCharacters(in: .whitespacesAndNewlines)
+                let a = hint.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                if q.isEmpty && a.isEmpty { return }
+
+                await MainActor.run {
+                    self.showHint(question: q.isEmpty ? "Контекст" : q, answer: a, engagement: hint.engagement)
+                }
+            } catch {
+                // Quietly ignore live errors; don't break recording.
             }
         }
     }

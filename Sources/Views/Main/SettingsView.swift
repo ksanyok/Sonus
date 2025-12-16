@@ -3,9 +3,13 @@ import AVFoundation
 import Carbon
 
 struct SettingsView: View {
+    @EnvironmentObject var l10n: LocalizationService
     @State private var apiKey: String = ""
     @State private var micPermissionStatus: AVAuthorizationStatus = .notDetermined
     @State private var showSaveSuccess = false
+    @State private var isValidatingKey = false
+    @State private var keyValidationResult: Bool? = nil
+    @State private var keyValidationMessage: String? = nil
     @State private var hotkeyChar: String = "Space"
     @State private var useCommand = true
     @State private var useShift = true
@@ -16,42 +20,19 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Settings")
+                Text(l10n.t("Settings", ru: "Настройки"))
                     .font(.largeTitle).bold()
-                
+
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Permissions").font(.headline)
-                    HStack {
-                        Text("Microphone Access")
-                        Spacer()
-                        switch micPermissionStatus {
-                        case .authorized:
-                            Label("Authorized", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        case .denied, .restricted:
-                            Button("Open System Settings") {
-                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            }
-                        case .notDetermined:
-                            Button("Request Access") {
-                                requestMicPermission()
-                            }
-                        @unknown default:
-                            Text("Unknown")
+                    Text(l10n.t("Language", ru: "Язык"))
+                        .font(.headline)
+                    Picker(l10n.t("App language", ru: "Язык приложения"), selection: $l10n.language) {
+                        ForEach(AppLanguage.allCases) { lang in
+                            Text(lang.displayName).tag(lang)
                         }
                     }
-                }
-                .padding()
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(12)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("OpenAI Configuration").font(.headline)
-                    SecureField("API Key", text: $apiKey)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                    Text("Your API key is stored locally.")
+                    .pickerStyle(.segmented)
+                    Text(l10n.t("Applies immediately inside the app.", ru: "Применяется сразу внутри приложения."))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -60,23 +41,82 @@ struct SettingsView: View {
                 .cornerRadius(12)
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Hotkey").font(.headline)
+                    Text(l10n.t("Permissions", ru: "Разрешения")).font(.headline)
                     HStack {
-                        Text("Key")
+                        Text(l10n.t("Microphone access", ru: "Доступ к микрофону"))
                         Spacer()
-                        TextField("Space or letter", text: $hotkeyChar)
+                        switch micPermissionStatus {
+                        case .authorized:
+                            Label(l10n.t("Authorized", ru: "Разрешено"), systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        case .denied, .restricted:
+                            Button(l10n.t("Open System Settings", ru: "Открыть системные настройки")) {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                        case .notDetermined:
+                            Button(l10n.t("Request access", ru: "Запросить доступ")) {
+                                requestMicPermission()
+                            }
+                        @unknown default:
+                            Text(l10n.t("Unknown", ru: "Неизвестно"))
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(l10n.t("OpenAI", ru: "OpenAI")).font(.headline)
+                    SecureField(l10n.t("API Key", ru: "API ключ"), text: $apiKey)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    Text(l10n.t("Your API key is stored locally.", ru: "Ключ хранится локально на этом компьютере."))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 10) {
+                        Button(isValidatingKey ? l10n.t("Validating…", ru: "Проверяем…") : l10n.t("Validate key", ru: "Проверить ключ")) {
+                            validateKey()
+                        }
+                        .disabled(isValidatingKey)
+
+                        if let ok = keyValidationResult {
+                            Label(ok ? l10n.t("Valid", ru: "Валиден") : l10n.t("Invalid", ru: "Неверный"), systemImage: ok ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                                .foregroundColor(ok ? .green : .red)
+                        }
+                        Spacer()
+                    }
+                    if let msg = keyValidationMessage {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(l10n.t("Hotkey", ru: "Хоткей"))
+                        .font(.headline)
+                    HStack {
+                        Text(l10n.t("Key", ru: "Клавиша"))
+                        Spacer()
+                        TextField(l10n.t("Space or letter", ru: "Space или буква"), text: $hotkeyChar)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .frame(width: 140)
                     }
                     HStack {
-                        Toggle("Command", isOn: $useCommand)
-                        Toggle("Shift", isOn: $useShift)
+                        Toggle(l10n.t("Command", ru: "Command"), isOn: $useCommand)
+                        Toggle(l10n.t("Shift", ru: "Shift"), isOn: $useShift)
                     }
                     HStack {
-                        Toggle("Option", isOn: $useOption)
-                        Toggle("Control", isOn: $useControl)
+                        Toggle(l10n.t("Option", ru: "Option"), isOn: $useOption)
+                        Toggle(l10n.t("Control", ru: "Control"), isOn: $useControl)
                     }
-                    Text("Use single key name like 'Space' or 'A'.")
+                    Text(l10n.t("Use a single key name like 'Space' or 'A'.", ru: "Используйте одно имя клавиши: 'Space' или 'A'."))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -86,7 +126,7 @@ struct SettingsView: View {
                 
                 HStack {
                     Spacer()
-                    Button("Save") { saveSettings() }
+                    Button(l10n.t("Save", ru: "Сохранить")) { saveSettings() }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 }
@@ -95,7 +135,7 @@ struct SettingsView: View {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                        Text("Settings saved successfully")
+                        Text(l10n.t("Settings saved", ru: "Настройки сохранены"))
                     }
                     .padding()
                     .background(Color.green.opacity(0.1))
@@ -114,8 +154,11 @@ struct SettingsView: View {
     }
     
     private func saveSettings() {
-        guard !apiKey.isEmpty else { return }
-        KeychainService.shared.save(key: apiKey)
+        if apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            KeychainService.shared.delete()
+        } else {
+            KeychainService.shared.save(key: apiKey)
+        }
         saveHotkey()
         withAnimation {
             showSaveSuccess = true
@@ -132,6 +175,31 @@ struct SettingsView: View {
             apiKey = key
         }
         loadHotkey()
+    }
+
+    private func validateKey() {
+        keyValidationMessage = nil
+        keyValidationResult = nil
+        isValidatingKey = true
+
+        Task {
+            do {
+                let ok = try await OpenAIClient.shared.validateAPIKey()
+                await MainActor.run {
+                    keyValidationResult = ok
+                    keyValidationMessage = ok
+                        ? l10n.t("Key works.", ru: "Ключ работает.")
+                        : l10n.t("Key rejected by OpenAI (401/403).", ru: "OpenAI отклонил ключ (401/403).")
+                    isValidatingKey = false
+                }
+            } catch {
+                await MainActor.run {
+                    keyValidationResult = false
+                    keyValidationMessage = error.localizedDescription
+                    isValidatingKey = false
+                }
+            }
+        }
     }
     
     private func checkMicPermission() {

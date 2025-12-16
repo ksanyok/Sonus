@@ -37,6 +37,62 @@ class OpenAIClient {
     private var apiKey: String? {
         KeychainService.shared.load()
     }
+
+    private func dataWithRetry(for request: URLRequest, maxRetries: Int = 3) async throws -> (Data, URLResponse) {
+        var attempt = 0
+        var lastError: Error?
+
+        while attempt <= maxRetries {
+            do {
+                let (data, response) = try await session.data(for: request)
+                if let http = response as? HTTPURLResponse {
+                    // Retry transient statuses
+                    if [429, 502, 503, 504].contains(http.statusCode), attempt < maxRetries {
+                        let base = 0.8 * pow(2.0, Double(attempt))
+                        let jitter = Double.random(in: 0...0.25)
+                        try await Task.sleep(nanoseconds: UInt64((base + jitter) * 1_000_000_000))
+                        attempt += 1
+                        continue
+                    }
+                }
+                return (data, response)
+            } catch {
+                lastError = error
+                if attempt >= maxRetries { break }
+                let base = 0.6 * pow(2.0, Double(attempt))
+                let jitter = Double.random(in: 0...0.25)
+                try await Task.sleep(nanoseconds: UInt64((base + jitter) * 1_000_000_000))
+                attempt += 1
+            }
+        }
+
+        throw OpenAIError.networkError(lastError ?? URLError(.cannotConnectToHost))
+    }
+
+    func validateAPIKey() async throws -> Bool {
+        guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
+
+        let url = URL(string: "\(baseURL)/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+        let (responseData, response) = try await dataWithRetry(for: request, maxRetries: 1)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenAIError.networkError(URLError(.badServerResponse))
+        }
+        if http.statusCode == 401 || http.statusCode == 403 {
+            return false
+        }
+        if !(200...299).contains(http.statusCode) {
+            if let errorJson = try? JSONDecoder().decode(APIErrorResponse.self, from: responseData) {
+                throw OpenAIError.apiError(errorJson.error.message)
+            }
+            throw OpenAIError.apiError("Status code: \(http.statusCode)")
+        }
+        return true
+    }
     
     func transcribe(audioURL: URL, onProgress: ((Double, String) -> Void)? = nil) async throws -> String {
         guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
@@ -54,6 +110,12 @@ class OpenAIClient {
         let answer: String
         let engagement: Double
         
+    }
+
+    struct LiveHintResponse: Codable {
+        let question: String
+        let answer: String
+        let engagement: Double
     }
 
     func realtimeHint(question: String, context: String) async throws -> RealtimeHintResponse {
@@ -91,7 +153,7 @@ class OpenAIClient {
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await dataWithRetry(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw OpenAIError.networkError(URLError(.badServerResponse))
@@ -109,6 +171,65 @@ class OpenAIClient {
             throw OpenAIError.noData
         }
         return try JSONDecoder().decode(RealtimeHintResponse.self, from: data)
+    }
+
+    func liveHint(context: String) async throws -> LiveHintResponse {
+        guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
+
+        let url = URL(string: "\(baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 45
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let prompt = """
+        Ты — ассистент продавца во время звонка. На основе последнего контекста диалога:
+        1) Выдели самый важный вопрос/возражение клиента (если его нет — сформулируй как краткое описание текущего сомнения/темы).
+        2) Предложи краткий, конкретный ответ/следующую фразу продавца.
+        3) Оцени вовлечённость клиента 0..1.
+
+        Правила:
+        - Не выдумывай факты, опирайся только на контекст.
+        - Ответ максимально практичный и короткий.
+
+        Верни строго JSON:
+        {"question":"...","answer":"...","engagement":0.0}
+
+        Контекст:
+        \(context)
+        """
+
+        let body: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": [
+                ["role": "system", "content": "Отвечай на русском. Возвращай только JSON без Markdown."],
+                ["role": "user", "content": prompt]
+            ],
+            "response_format": ["type": "json_object"],
+            "temperature": 0.4
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (responseData, response) = try await dataWithRetry(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.networkError(URLError(.badServerResponse))
+        }
+        if !(200...299).contains(httpResponse.statusCode) {
+            if let errorJson = try? JSONDecoder().decode(APIErrorResponse.self, from: responseData) {
+                throw OpenAIError.apiError(errorJson.error.message)
+            }
+            throw OpenAIError.apiError("Status code: \(httpResponse.statusCode)")
+        }
+
+        let result = try JSONDecoder().decode(ChatCompletionResponse.self, from: responseData)
+        guard let content = result.choices.first?.message.content,
+              let data = content.data(using: .utf8) else {
+            throw OpenAIError.noData
+        }
+
+        return try JSONDecoder().decode(LiveHintResponse.self, from: data)
     }
     
     func analyze(text: String) async throws -> Analysis {
@@ -174,6 +295,16 @@ class OpenAIClient {
                     }
                 - keyMoments: массив объектов {speaker, text, type, timeHint}
                 - actionItems: массив объектов {title, owner, dueDateISO, priority, notes}
+                - commitments: массив объектов {title, owner, dueDateISO, notes, confidence}
+                    (это именно обещания/договорённости: "я пришлю", "мы покажем", "вышлем КП", "сделаем демо" и т.п.)
+                - conversationMetrics: объект {
+                        talkTimeShare: словарь {"sales":0..100, "client":0..100} (если можно оценить),
+                        interruptionsCount: число,
+                        questionCount: число,
+                        monologueLongestSeconds: число,
+                        sentimentTrend: "improving"|"worsening"|"stable"|"mixed",
+                        riskFlags: массив строк
+                    }
 
                 Стенограмма:
                 \(condensed)
@@ -192,7 +323,7 @@ class OpenAIClient {
         
         request.timeoutInterval = 180
 
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await dataWithRetry(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw OpenAIError.networkError(URLError(.badServerResponse))
@@ -252,7 +383,7 @@ class OpenAIClient {
         let data = try createMultipartBody(audioURL: audioURL, boundary: boundary)
         request.httpBody = data
 
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await dataWithRetry(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw OpenAIError.networkError(URLError(.badServerResponse))
         }

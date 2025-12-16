@@ -19,7 +19,7 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.locale = .autoupdatingCurrent
         return formatter.string(from: date)
     }
     
@@ -42,6 +42,26 @@ enum SessionCategory: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     
     var displayName: String {
+        switch self {
+        case .personal: return "Личное"
+        case .clients: return "Клиенты"
+        case .conferences: return "Конференции"
+        case .meetings: return "Встречи"
+        case .other: return "Прочее"
+        }
+    }
+
+    var displayNameEn: String {
+        switch self {
+        case .personal: return "Personal"
+        case .clients: return "Clients"
+        case .conferences: return "Conferences"
+        case .meetings: return "Meetings"
+        case .other: return "Other"
+        }
+    }
+
+    var displayNameRu: String {
         switch self {
         case .personal: return "Личное"
         case .clients: return "Клиенты"
@@ -90,6 +110,8 @@ struct Analysis: Codable, Equatable, Hashable {
     var clientInsights: ClientInsights?
     var keyMoments: [KeyMoment] = []
     var actionItems: [ActionItem] = []
+    var commitments: [Commitment] = []
+    var conversationMetrics: ConversationMetrics?
     
     init(summary: String,
          sentiment: String,
@@ -111,7 +133,9 @@ struct Analysis: Codable, Equatable, Hashable {
          extractedEntities: ExtractedEntities? = nil,
          clientInsights: ClientInsights? = nil,
          keyMoments: [KeyMoment] = [],
-         actionItems: [ActionItem] = []) {
+            actionItems: [ActionItem] = [],
+            commitments: [Commitment] = [],
+            conversationMetrics: ConversationMetrics? = nil) {
         self.summary = summary
         self.sentiment = sentiment
         self.score = score
@@ -133,6 +157,8 @@ struct Analysis: Codable, Equatable, Hashable {
         self.clientInsights = clientInsights
         self.keyMoments = keyMoments
         self.actionItems = actionItems
+        self.commitments = commitments
+        self.conversationMetrics = conversationMetrics
     }
     
     init(from decoder: Decoder) throws {
@@ -159,6 +185,8 @@ struct Analysis: Codable, Equatable, Hashable {
         clientInsights = try? c.decode(ClientInsights.self, forKey: .clientInsights)
         keyMoments = (try? c.decode([KeyMoment].self, forKey: .keyMoments)) ?? []
         actionItems = (try? c.decode([ActionItem].self, forKey: .actionItems)) ?? []
+        commitments = (try? c.decode([Commitment].self, forKey: .commitments)) ?? []
+        conversationMetrics = try? c.decode(ConversationMetrics.self, forKey: .conversationMetrics)
     }
 }
 
@@ -230,6 +258,23 @@ struct ActionItem: Codable, Equatable, Hashable {
     var dueDateISO: String? // YYYY-MM-DD
     var priority: String? // "low" | "medium" | "high"
     var notes: String?
+}
+
+struct Commitment: Codable, Equatable, Hashable {
+    var title: String
+    var owner: String? // "sales" | "client" | name
+    var dueDateISO: String? // YYYY-MM-DD
+    var notes: String?
+    var confidence: Int? // 0-100
+}
+
+struct ConversationMetrics: Codable, Equatable, Hashable {
+    var talkTimeShare: [String: Int]? // e.g. {"sales": 55, "client": 45}
+    var interruptionsCount: Int?
+    var questionCount: Int?
+    var monologueLongestSeconds: Int?
+    var sentimentTrend: String? // e.g. "improving" | "worsening" | "stable" | "mixed"
+    var riskFlags: [String]?
 }
 
 struct EvaluationCriterion: Codable, Equatable, Hashable, Identifiable {

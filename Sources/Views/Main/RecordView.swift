@@ -3,6 +3,7 @@ import SwiftUI
 struct RecordView: View {
     @ObservedObject var viewModel: AppViewModel
     @ObservedObject var recorder: AudioRecorder
+    @EnvironmentObject private var l10n: LocalizationService
     @State private var isHovering = false
     @State private var pulseAnimation = false
     
@@ -32,10 +33,10 @@ struct RecordView: View {
             VStack(spacing: 28) {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
-                        Label(recorder.isRecording ? "Recording" : "Ready", systemImage: recorder.isRecording ? "record.circle" : "waveform")
+                        Label(recorder.isRecording ? l10n.t("Recording", ru: "Запись") : l10n.t("Ready", ru: "Готов"), systemImage: recorder.isRecording ? "record.circle" : "waveform")
                             .font(.headline)
                             .foregroundColor(recorder.isRecording ? .red : .white.opacity(0.9))
-                        Text("Hotkey: Cmd+Shift+Space (настраивается в Settings)")
+                        Text(l10n.t("Hotkey: Cmd+Shift+Space (configurable in Settings)", ru: "Хоткей: Cmd+Shift+Space (настраивается в Settings)"))
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -46,7 +47,7 @@ struct RecordView: View {
                         .overlay(
                             HStack(spacing: 12) {
                                 Image(systemName: "waveform.path.ecg")
-                                Text(recorder.isRecording ? "Live" : "Standby")
+                                Text(recorder.isRecording ? l10n.t("Live", ru: "Live") : l10n.t("Standby", ru: "Ожидание"))
                             }
                             .foregroundColor(.white.opacity(0.8))
                             .padding(.horizontal, 14)
@@ -67,7 +68,7 @@ struct RecordView: View {
                                             .foregroundColor(.white)
                                             .contentTransition(.numericText())
                                     } else {
-                                        Text("Готов к записи")
+                                        Text(l10n.t("Ready to record", ru: "Готов к записи"))
                                             .font(.system(size: 32, weight: .light))
                                             .foregroundColor(.white.opacity(0.85))
                                     }
@@ -83,10 +84,10 @@ struct RecordView: View {
                         
                         HStack(spacing: 14) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Название")
+                                Text(l10n.t("Title", ru: "Название"))
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.6))
-                                TextField("Например, Встреча с клиентом", text: $viewModel.draftTitle)
+                                TextField(l10n.t("e.g. Client meeting", ru: "Например, Встреча с клиентом"), text: $viewModel.draftTitle)
                                     .textFieldStyle(.roundedBorder)
                                     .padding(10)
                                     .background(Color.white.opacity(0.06))
@@ -94,14 +95,14 @@ struct RecordView: View {
                                     .foregroundColor(.white)
                             }
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Категория")
+                                Text(l10n.t("Category", ru: "Категория"))
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.6))
-                                Picker("Категория", selection: $viewModel.draftCategory) {
+                                Picker(l10n.t("Category", ru: "Категория"), selection: $viewModel.draftCategory) {
                                     ForEach(SessionCategory.allCases) { category in
                                         HStack {
                                             Image(systemName: category.icon)
-                                            Text(category.displayName)
+                                            Text(l10n.t(category.displayNameEn, ru: category.displayNameRu))
                                         }
                                         .tag(category)
                                     }
@@ -122,7 +123,7 @@ struct RecordView: View {
                             .fill(.ultraThinMaterial)
                             .overlay(
                                 VStack(spacing: 16) {
-                                    Text(recorder.isRecording ? "Идёт запись" : "Нажми, чтобы начать")
+                                    Text(recorder.isRecording ? l10n.t("Recording in progress", ru: "Идёт запись") : l10n.t("Tap to start", ru: "Нажми, чтобы начать"))
                                         .font(.headline)
                                         .foregroundColor(.white)
                                     
@@ -172,10 +173,10 @@ struct RecordView: View {
                                     }
                                     
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Советы")
+                                        Text(l10n.t("Tips", ru: "Советы"))
                                             .font(.caption)
                                             .foregroundColor(.white.opacity(0.7))
-                                        Text("Используй хоткей или кнопку, чтобы начать. Категория и название сохранятся в новую запись.")
+                                        Text(l10n.t("Use the hotkey or the button to start. Title and category will be saved into the new session.", ru: "Используй хоткей или кнопку, чтобы начать. Категория и название сохранятся в новую запись."))
                                             .foregroundColor(.white.opacity(0.7))
                                             .font(.footnote)
                                             .fixedSize(horizontal: false, vertical: true)
@@ -187,7 +188,7 @@ struct RecordView: View {
                                         Button {
                                             viewModel.startRecording()
                                         } label: {
-                                            Label("Старт", systemImage: "play.fill")
+                                            Label(l10n.t("Start", ru: "Старт"), systemImage: "play.fill")
                                                 .frame(maxWidth: .infinity)
                                         }
                                         .buttonStyle(.borderedProminent)
@@ -196,7 +197,7 @@ struct RecordView: View {
                                         Button {
                                             viewModel.stopRecording()
                                         } label: {
-                                            Label("Стоп", systemImage: "stop.fill")
+                                            Label(l10n.t("Stop", ru: "Стоп"), systemImage: "stop.fill")
                                                 .frame(maxWidth: .infinity)
                                         }
                                         .buttonStyle(.bordered)

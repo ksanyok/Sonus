@@ -2,108 +2,144 @@ import SwiftUI
 import AppKit
 
 struct SessionDetailView: View {
-    let session: Session
+    let sessionID: UUID
     @ObservedObject var viewModel: AppViewModel
+    @EnvironmentObject private var l10n: LocalizationService
     @StateObject private var audioPlayer = AudioPlayer()
     @State private var selectedTab = 0
+
+    private var session: Session? {
+        viewModel.sessions.first(where: { $0.id == sessionID })
+    }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(session.title)
-                        .font(.largeTitle).bold()
-                    HStack(spacing: 8) {
-                        Label(session.category.displayName, systemImage: session.category.icon)
-                        Text("•")
-                        Text(session.date.formatted(date: .long, time: .shortened))
-                        Text("•")
-                        Text(formatDuration(session.duration))
-                    }
-                    .foregroundColor(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 10) {
-                    HStack(spacing: 10) {
-                        Button("Analyze") { viewModel.processSession(session) }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(session.isProcessing)
-                        Button("Delete", role: .destructive) { viewModel.deleteSession(session) }
-                            .buttonStyle(.bordered)
-                    }
-                    if session.isProcessing {
-                        ProgressView("Processing...")
-                            .controlSize(.small)
-                    }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 16)
-            
-            // Audio Player card
-            HStack(spacing: 16) {
-                Button(action: {
-                    let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
-                    audioPlayer.togglePlayback(audioURL: url)
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 72, height: 72)
-                        Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title)
-                            .foregroundColor(.white)
-                    }
-                }
-                .buttonStyle(.plain)
-                
-                VStack(spacing: 6) {
-                    Slider(value: playbackProgress)
-                    HStack {
-                        Text(formatDuration(audioPlayer.currentTime)).foregroundColor(.secondary)
+        Group {
+            if let session {
+                VStack(spacing: 0) {
+                    // Header
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if let customTitle = session.customTitle, !customTitle.isEmpty {
+                                Text(customTitle)
+                                    .font(.largeTitle).bold()
+                            } else {
+                                Text(session.date, format: .dateTime.year().month().day().hour().minute())
+                                    .font(.largeTitle).bold()
+                            }
+                            HStack(spacing: 8) {
+                                Label(l10n.t(session.category.displayNameEn, ru: session.category.displayNameRu), systemImage: session.category.icon)
+                                Text("•")
+                                Text(session.date, format: .dateTime.year().month().day().hour().minute())
+                                Text("•")
+                                Text(formatDuration(session.duration))
+                            }
+                            .foregroundColor(.secondary)
+                        }
                         Spacer()
-                        Text(formatDuration(displayDuration)).foregroundColor(.secondary)
-                    }
-                    .font(.caption)
-                }
-                .padding(.vertical, 8)
-            }
-            .padding()
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(14)
-            .padding(.horizontal)
-            
-            // Content
-            if let analysis = session.analysis {
-                Picker("", selection: $selectedTab) {
-                    Text("Overview").tag(0)
-                    Text("Analysis").tag(1)
-                    Text("Transcript").tag(2)
-                }
-                .pickerStyle(.segmented)
-                .padding()
-                
-                ScrollView {
-                    VStack(spacing: 20) {
-                        if selectedTab == 0 {
-                            OverviewView(analysis: analysis)
-                        } else if selectedTab == 1 {
-                            DetailedAnalysisView(analysis: analysis)
-                        } else {
-                            TranscriptView(transcript: session.transcript)
+                        VStack(alignment: .trailing, spacing: 10) {
+                            HStack(spacing: 10) {
+                                Button(l10n.t("Analyze", ru: "Анализ")) { viewModel.processSession(session) }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(session.isProcessing)
+                                Button(l10n.t("Delete", ru: "Удалить"), role: .destructive) { viewModel.deleteSession(session) }
+                                    .buttonStyle(.bordered)
+                            }
+                            if session.isProcessing {
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    Text(viewModel.processingStatus[session.id] ?? l10n.t("Processing…", ru: "Обработка…"))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    if let p = viewModel.processingProgress[session.id] {
+                                        ProgressView(value: p)
+                                            .frame(width: 220)
+                                            .controlSize(.small)
+                                    } else {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    }
+                                }
+                            }
                         }
                     }
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+
+                    // Audio Player card
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
+                            audioPlayer.togglePlayback(audioURL: url)
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 72, height: 72)
+                                Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.title)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        VStack(spacing: 6) {
+                            Slider(value: playbackProgress)
+                            HStack {
+                                Text(formatDuration(audioPlayer.currentTime)).foregroundColor(.secondary)
+                                Spacer()
+                                Text(formatDuration(displayDuration)).foregroundColor(.secondary)
+                            }
+                            .font(.caption)
+                        }
+                        .padding(.vertical, 8)
+                    }
                     .padding()
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(14)
+                    .padding(.horizontal)
+
+                    // Content
+                    if let analysis = session.analysis {
+                        Picker("", selection: $selectedTab) {
+                            Text(l10n.t("Overview", ru: "Обзор")).tag(0)
+                            Text(l10n.t("Analysis", ru: "Анализ")).tag(1)
+                            Text(l10n.t("Reminders", ru: "Напоминания")).tag(2)
+                            Text(l10n.t("Transcript", ru: "Транскрипт")).tag(3)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding()
+
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                if selectedTab == 0 {
+                                    OverviewView(analysis: analysis)
+                                } else if selectedTab == 1 {
+                                    DetailedAnalysisView(analysis: analysis)
+                                } else if selectedTab == 2 {
+                                    RemindersView(analysis: analysis)
+                                } else {
+                                    TranscriptView(transcript: session.transcript)
+                                }
+                            }
+                            .padding()
+                        }
+                    } else {
+                        Spacer()
+                        Text(l10n.t("No analysis available", ru: "Нет анализа"))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
                 }
+                .background(Color(nsColor: .windowBackgroundColor))
             } else {
-                Spacer()
-                Text("No analysis available")
-                    .foregroundColor(.secondary)
-                Spacer()
+                VStack {
+                    Spacer()
+                    Text(l10n.t("Session not found", ru: "Сессия не найдена"))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .background(Color(nsColor: .windowBackgroundColor))
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
     
     func formatDuration(_ duration: TimeInterval) -> String {
@@ -113,7 +149,7 @@ struct SessionDetailView: View {
     }
 
     private var displayDuration: TimeInterval {
-        let effectiveDuration = audioPlayer.duration > 0 ? audioPlayer.duration : session.duration
+        let effectiveDuration = audioPlayer.duration > 0 ? audioPlayer.duration : (session?.duration ?? 0)
         return effectiveDuration > 0 ? effectiveDuration : 0
     }
 
@@ -128,14 +164,119 @@ struct SessionDetailView: View {
     }
 }
 
+private struct RemindersView: View {
+    let analysis: Analysis
+    @EnvironmentObject private var l10n: LocalizationService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !analysis.commitments.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(l10n.t("Commitments", ru: "Обещали/договорились"), systemImage: "paperplane")
+                        .font(.headline)
+                    ForEach(Array(analysis.commitments.enumerated()), id: \.offset) { _, c in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(c.title)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            HStack(spacing: 10) {
+                                if let owner = c.owner, !owner.isEmpty {
+                                    Text(owner)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let due = c.dueDateISO, !due.isEmpty {
+                                    Text(due)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let conf = c.confidence {
+                                    Text("\(conf)%")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            if let notes = c.notes, !notes.isEmpty {
+                                Text(notes)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(10)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
+
+            if !analysis.actionItems.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(l10n.t("Action items", ru: "Задачи"), systemImage: "checkmark.circle")
+                        .font(.headline)
+                    ForEach(Array(analysis.actionItems.enumerated()), id: \.offset) { _, item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(item.title)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            HStack(spacing: 10) {
+                                if let owner = item.owner, !owner.isEmpty {
+                                    Text(owner)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let due = item.dueDateISO, !due.isEmpty {
+                                    Text(due)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let pr = item.priority, !pr.isEmpty {
+                                    Text(pr)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                            if let notes = item.notes, !notes.isEmpty {
+                                Text(notes)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(10)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
+
+            if analysis.commitments.isEmpty && analysis.actionItems.isEmpty {
+                Text(l10n.t("No reminders yet. Run analysis again and they will appear here.", ru: "Пока нет напоминаний. После повторного анализа они появятся здесь."))
+                    .foregroundColor(.secondary)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(12)
+            }
+        }
+    }
+}
+
 struct OverviewView: View {
     let analysis: Analysis
+    @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // Summary Card
             VStack(alignment: .leading, spacing: 10) {
-                Label("Summary", systemImage: "text.alignleft")
+                Label(l10n.t("Summary", ru: "Итог"), systemImage: "text.alignleft")
                     .font(.headline)
                 Text(analysis.summary)
                     .font(.body)
@@ -147,18 +288,18 @@ struct OverviewView: View {
             
             // Key Metrics
             HStack(spacing: 20) {
-                MetricCard(title: "Score", value: "\(analysis.score)%", icon: "chart.bar.fill", color: .blue)
-                MetricCard(title: "Sentiment", value: analysis.sentiment, icon: "face.smiling", color: .green)
-                MetricCard(title: "Engagement", value: "\(analysis.engagementScore)%", icon: "person.2.wave.2.fill", color: .orange)
-                MetricCard(title: "Sales Prob.", value: "\(analysis.salesProbability)%", icon: "cart.badge.plus", color: .pink)
+                MetricCard(title: l10n.t("Score", ru: "Оценка"), value: "\(analysis.score)%", icon: "chart.bar.fill", color: .blue)
+                MetricCard(title: l10n.t("Sentiment", ru: "Тон"), value: analysis.sentiment, icon: "face.smiling", color: .green)
+                MetricCard(title: l10n.t("Engagement", ru: "Вовлечённость"), value: "\(analysis.engagementScore)%", icon: "person.2.wave.2.fill", color: .orange)
+                MetricCard(title: l10n.t("Sales Prob.", ru: "Вероятность"), value: "\(analysis.salesProbability)%", icon: "cart.badge.plus", color: .pink)
             }
             
             // Speakers / Languages
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Label("Speakers", systemImage: "person.3.fill")
+                    Label(l10n.t("Speakers", ru: "Участники"), systemImage: "person.3.fill")
                     Spacer()
-                    Text("\(analysis.speakerCount ?? analysis.participants.count) participant(s)")
+                    Text(l10n.t("\(analysis.speakerCount ?? analysis.participants.count) participant(s)", ru: "\(analysis.speakerCount ?? analysis.participants.count) участник(ов)"))
                         .foregroundColor(.secondary)
                 }
                 WrapChips(items: analysis.participants)
@@ -168,7 +309,7 @@ struct OverviewView: View {
             .cornerRadius(12)
             
             VStack(alignment: .leading, spacing: 12) {
-                Label("Languages", systemImage: "globe")
+                Label(l10n.t("Languages", ru: "Языки"), systemImage: "globe")
                 WrapChips(items: analysis.languages)
             }
             .padding()
@@ -177,7 +318,7 @@ struct OverviewView: View {
             
             if let stop = analysis.stopWords, !stop.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Stop words / fillers", systemImage: "ellipsis.message")
+                    Label(l10n.t("Stop words / fillers", ru: "Слова-паразиты"), systemImage: "ellipsis.message")
                     WrapChips(items: stop)
                 }
                 .padding()
@@ -187,7 +328,7 @@ struct OverviewView: View {
             
             // Intent
             VStack(alignment: .leading, spacing: 10) {
-                Label("Customer Intent", systemImage: "cart.fill")
+                Label(l10n.t("Customer Intent", ru: "Намерение клиента"), systemImage: "cart.fill")
                     .font(.headline)
                 Text(analysis.customerIntent)
                     .font(.title3)
@@ -200,7 +341,7 @@ struct OverviewView: View {
 
             if !analysis.nextSteps.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Next Steps", systemImage: "arrow.turn.up.right")
+                    Label(l10n.t("Next Steps", ru: "Следующие шаги"), systemImage: "arrow.turn.up.right")
                         .font(.headline)
                     ForEach(analysis.nextSteps, id: \.self) { step in
                         HStack(alignment: .top) {
@@ -218,12 +359,12 @@ struct OverviewView: View {
 
             if let style = analysis.communicationStyle {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Стиль общения", systemImage: "quote.bubble")
+                    Label(l10n.t("Communication style", ru: "Стиль общения"), systemImage: "quote.bubble")
                         .font(.headline)
 
                     if let formality = style.formality, !formality.isEmpty {
                         HStack {
-                            Text("Формат")
+                            Text(l10n.t("Formality", ru: "Формат"))
                             Spacer()
                             Text(formality)
                                 .foregroundColor(.secondary)
@@ -231,7 +372,7 @@ struct OverviewView: View {
                     }
                     if let pacing = style.pacing, !pacing.isEmpty {
                         HStack {
-                            Text("Темп")
+                            Text(l10n.t("Pacing", ru: "Темп"))
                             Spacer()
                             Text(pacing)
                                 .foregroundColor(.secondary)
@@ -239,7 +380,7 @@ struct OverviewView: View {
                     }
                     if let structure = style.structure, !structure.isEmpty {
                         HStack {
-                            Text("Структура")
+                            Text(l10n.t("Structure", ru: "Структура"))
                             Spacer()
                             Text(structure)
                                 .foregroundColor(.secondary)
@@ -247,7 +388,7 @@ struct OverviewView: View {
                     }
                     if let conflict = style.conflictLevel {
                         HStack {
-                            Text("Конфликтность")
+                            Text(l10n.t("Conflict", ru: "Конфликтность"))
                             Spacer()
                             Text("\(conflict)%")
                                 .foregroundColor(.secondary)
@@ -263,12 +404,12 @@ struct OverviewView: View {
             }
 
             if let client = analysis.client {
-                ParticipantProfileCard(title: "Клиент", profile: client)
+                ParticipantProfileCard(title: l10n.t("Client", ru: "Клиент"), profile: client)
             }
 
             if let others = analysis.otherParticipants, !others.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Другие собеседники", systemImage: "person.3")
+                    Label(l10n.t("Other participants", ru: "Другие собеседники"), systemImage: "person.3")
                         .font(.headline)
                     ForEach(Array(others.enumerated()), id: \.offset) { _, p in
                         ParticipantProfileRow(profile: p)
@@ -281,7 +422,7 @@ struct OverviewView: View {
 
             if let insights = analysis.clientInsights {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Анализ клиента", systemImage: "person.text.rectangle")
+                    Label(l10n.t("Client analysis", ru: "Анализ клиента"), systemImage: "person.text.rectangle")
                         .font(.headline)
 
                     if let s = insights.summary, !s.isEmpty {
@@ -290,34 +431,34 @@ struct OverviewView: View {
                     }
 
                     if let goals = insights.goals, !goals.isEmpty {
-                        BulletListCard(title: "Цели", items: goals)
+                        BulletListCard(title: l10n.t("Goals", ru: "Цели"), items: goals)
                     }
                     if let pains = insights.painPoints, !pains.isEmpty {
-                        BulletListCard(title: "Боли/проблемы", items: pains)
+                        BulletListCard(title: l10n.t("Pain points", ru: "Боли/проблемы"), items: pains)
                     }
                     if let pr = insights.priorities, !pr.isEmpty {
-                        BulletListCard(title: "Приоритеты", items: pr)
+                        BulletListCard(title: l10n.t("Priorities", ru: "Приоритеты"), items: pr)
                     }
                     if let budget = insights.budget, !budget.isEmpty {
                         HStack {
-                            Text("Бюджет")
+                            Text(l10n.t("Budget", ru: "Бюджет"))
                             Spacer()
                             Text(budget).foregroundColor(.secondary)
                         }
                     }
                     if let timeline = insights.timeline, !timeline.isEmpty {
                         HStack {
-                            Text("Сроки")
+                            Text(l10n.t("Timeline", ru: "Сроки"))
                             Spacer()
                             Text(timeline).foregroundColor(.secondary)
                         }
                     }
                     if let dm = insights.decisionMakers, !dm.isEmpty {
-                        BulletListCard(title: "ЛПР/участники решения", items: dm)
+                        BulletListCard(title: l10n.t("Decision makers", ru: "ЛПР/участники решения"), items: dm)
                     }
                     if let dp = insights.decisionProcess, !dp.isEmpty {
                         HStack(alignment: .top) {
-                            Text("Процесс решения")
+                            Text(l10n.t("Decision process", ru: "Процесс решения"))
                             Spacer()
                             Text(dp)
                                 .foregroundColor(.secondary)
@@ -325,10 +466,10 @@ struct OverviewView: View {
                         }
                     }
                     if let sig = insights.buyingSignals, !sig.isEmpty {
-                        BulletListCard(title: "Сигналы интереса", items: sig)
+                        BulletListCard(title: l10n.t("Buying signals", ru: "Сигналы интереса"), items: sig)
                     }
                     if let risks = insights.risks, !risks.isEmpty {
-                        BulletListCard(title: "Риски", items: risks)
+                        BulletListCard(title: l10n.t("Risks", ru: "Риски"), items: risks)
                     }
                 }
                 .padding()
@@ -338,48 +479,48 @@ struct OverviewView: View {
 
             if let entities = analysis.extractedEntities, entities.hasAnyData {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Извлечённые данные", systemImage: "tray.full")
+                    Label(l10n.t("Extracted data", ru: "Извлечённые данные"), systemImage: "tray.full")
                         .font(.headline)
 
                     if let companies = entities.companies, !companies.isEmpty {
-                        Text("Компании")
+                        Text(l10n.t("Companies", ru: "Компании"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         WrapChips(items: companies)
                     }
                     if let people = entities.people, !people.isEmpty {
-                        Text("Люди")
+                        Text(l10n.t("People", ru: "Люди"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         WrapChips(items: people)
                     }
                     if let products = entities.products, !products.isEmpty {
-                        Text("Продукты")
+                        Text(l10n.t("Products", ru: "Продукты"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         WrapChips(items: products)
                     }
                     if let urls = entities.urls, !urls.isEmpty {
-                        Text("Ссылки")
+                        Text(l10n.t("Links", ru: "Ссылки"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         WrapChips(items: urls)
                     }
                     if let emails = entities.emails, !emails.isEmpty {
-                        Text("Email")
+                        Text(l10n.t("Email", ru: "Email"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         WrapChips(items: emails)
                     }
                     if let phones = entities.phones, !phones.isEmpty {
-                        Text("Телефоны")
+                        Text(l10n.t("Phones", ru: "Телефоны"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         WrapChips(items: phones)
                     }
                     if let dates = entities.dateMentions, !dates.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Даты/дедлайны")
+                            Text(l10n.t("Dates / deadlines", ru: "Даты/дедлайны"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             ForEach(Array(dates.enumerated()), id: \.offset) { _, d in
@@ -409,18 +550,77 @@ struct OverviewView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
             }
+
+            if let m = analysis.conversationMetrics {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(l10n.t("Conversation metrics", ru: "Метрики разговора"), systemImage: "waveform.path.ecg")
+                        .font(.headline)
+
+                    if let share = m.talkTimeShare, !share.isEmpty {
+                        let sales = share["sales"]
+                        let client = share["client"]
+                        if sales != nil || client != nil {
+                            HStack {
+                                Text(l10n.t("Talk time", ru: "Доля речи"))
+                                Spacer()
+                                Text("\(l10n.t("sales", ru: "продавец")) \(sales ?? 0)% • \(l10n.t("client", ru: "клиент")) \(client ?? 0)%")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    if let q = m.questionCount {
+                        HStack {
+                            Text(l10n.t("Questions", ru: "Вопросов"))
+                            Spacer()
+                            Text("\(q)")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let i = m.interruptionsCount {
+                        HStack {
+                            Text(l10n.t("Interruptions", ru: "Перебиваний"))
+                            Spacer()
+                            Text("\(i)")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let mono = m.monologueLongestSeconds {
+                        HStack {
+                            Text(l10n.t("Longest monologue", ru: "Длинный монолог"))
+                            Spacer()
+                            Text("\(mono)\(l10n.t("s", ru: "с"))")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let trend = m.sentimentTrend, !trend.isEmpty {
+                        HStack {
+                            Text(l10n.t("Sentiment trend", ru: "Тренд настроения"))
+                            Spacer()
+                            Text(trend)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    if let flags = m.riskFlags, !flags.isEmpty {
+                        BulletListCard(title: l10n.t("Risk flags", ru: "Флаги риска"), items: flags)
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
         }
     }
 }
 
 struct DetailedAnalysisView: View {
     let analysis: Analysis
+    @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // Criteria
             VStack(alignment: .leading, spacing: 10) {
-                Label("Evaluation Criteria", systemImage: "checklist")
+                Label(l10n.t("Evaluation criteria", ru: "Критерии оценки"), systemImage: "checklist")
                     .font(.headline)
                 
                 ForEach(analysis.criteria) { criterion in
@@ -446,7 +646,7 @@ struct DetailedAnalysisView: View {
             
             // Recommendations
             VStack(alignment: .leading, spacing: 10) {
-                Label("Recommendations", systemImage: "lightbulb.fill")
+                Label(l10n.t("Recommendations", ru: "Рекомендации"), systemImage: "lightbulb.fill")
                     .font(.headline)
                 
                 ForEach(analysis.recommendations, id: \.self) { rec in
@@ -464,7 +664,7 @@ struct DetailedAnalysisView: View {
 
             if !analysis.objections.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Objections", systemImage: "exclamationmark.bubble")
+                    Label(l10n.t("Objections", ru: "Возражения"), systemImage: "exclamationmark.bubble")
                         .font(.headline)
                     ForEach(analysis.objections, id: \.self) { obj in
                         HStack(alignment: .top) {
@@ -482,7 +682,7 @@ struct DetailedAnalysisView: View {
 
             if !analysis.keyMoments.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Ключевые моменты", systemImage: "bookmark")
+                    Label(l10n.t("Key moments", ru: "Ключевые моменты"), systemImage: "bookmark")
                         .font(.headline)
                     ForEach(Array(analysis.keyMoments.enumerated()), id: \.offset) { _, m in
                         VStack(alignment: .leading, spacing: 6) {
@@ -522,7 +722,7 @@ struct DetailedAnalysisView: View {
 
             if !analysis.actionItems.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Задачи и дедлайны", systemImage: "checkmark.circle")
+                    Label(l10n.t("Action items & deadlines", ru: "Задачи и дедлайны"), systemImage: "checkmark.circle")
                         .font(.headline)
                     ForEach(Array(analysis.actionItems.enumerated()), id: \.offset) { _, item in
                         VStack(alignment: .leading, spacing: 6) {
@@ -665,6 +865,7 @@ private extension ExtractedEntities {
 
 struct TranscriptView: View {
     let transcript: String?
+    @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -674,7 +875,7 @@ struct TranscriptView: View {
                     .lineSpacing(4)
                     .textSelection(.enabled)
             } else {
-                Text("No transcript available")
+                Text(l10n.t("No transcript available", ru: "Нет транскрипта"))
                     .foregroundColor(.secondary)
             }
         }

@@ -5,9 +5,13 @@ final class HintWindowController: NSWindowController {
     private weak var statusItem: NSStatusItem?
     private let panelSize = NSSize(width: 360, height: 280)
 
-    init(viewModel: AppViewModel, statusItem: NSStatusItem?) {
+    init(viewModel: AppViewModel, l10n: LocalizationService, statusItem: NSStatusItem?) {
         self.statusItem = statusItem
-        let hosting = NSHostingController(rootView: HintBubbleView(viewModel: viewModel))
+        let hosting = NSHostingController(
+            rootView: HintBubbleView(viewModel: viewModel)
+                .environmentObject(l10n)
+                .environment(\.locale, l10n.locale)
+        )
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: panelSize),
             styleMask: [.nonactivatingPanel, .fullSizeContentView],
