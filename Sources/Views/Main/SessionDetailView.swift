@@ -150,6 +150,7 @@ struct OverviewView: View {
                 MetricCard(title: "Score", value: "\(analysis.score)%", icon: "chart.bar.fill", color: .blue)
                 MetricCard(title: "Sentiment", value: analysis.sentiment, icon: "face.smiling", color: .green)
                 MetricCard(title: "Engagement", value: "\(analysis.engagementScore)%", icon: "person.2.wave.2.fill", color: .orange)
+                MetricCard(title: "Sales Prob.", value: "\(analysis.salesProbability)%", icon: "cart.badge.plus", color: .pink)
             }
             
             // Speakers / Languages
@@ -196,6 +197,24 @@ struct OverviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(12)
+
+            if !analysis.nextSteps.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Next Steps", systemImage: "arrow.turn.up.right")
+                        .font(.headline)
+                    ForEach(analysis.nextSteps, id: \.self) { step in
+                        HStack(alignment: .top) {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 6))
+                                .padding(.top, 6)
+                            Text(step)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
         }
     }
 }
@@ -248,6 +267,24 @@ struct DetailedAnalysisView: View {
             .padding()
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(12)
+
+            if !analysis.objections.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Objections", systemImage: "exclamationmark.bubble")
+                        .font(.headline)
+                    ForEach(analysis.objections, id: \.self) { obj in
+                        HStack(alignment: .top) {
+                            Image(systemName: "minus.circle")
+                                .font(.system(size: 10))
+                                .padding(.top, 4)
+                            Text(obj)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
         }
     }
 }

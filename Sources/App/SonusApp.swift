@@ -48,6 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Open Sonus", action: #selector(openMainWindow), keyEquivalent: "")
         menu.addItem(withTitle: "Toggle Recording", action: #selector(toggleRecording), keyEquivalent: "")
         menu.addItem(withTitle: "Show Hints", action: #selector(toggleHints), keyEquivalent: "")
+        menu.addItem(withTitle: "Simulate Live Hint", action: #selector(simulateHint), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q")
         statusItem?.menu = menu
@@ -74,6 +75,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         hintWindowController?.toggle()
+    }
+
+    @objc private func simulateHint() {
+        guard let viewModel else { return }
+        let sampleQuestions = [
+            "Можем ли мы уложиться в 2 недели?",
+            "Сколько будет стоить поддержка?",
+            "Какие гарантии по качеству?",
+            "Есть ли кейсы в моей отрасли?"
+        ]
+        let sampleAnswers = [
+            "Оценим объём и вернём точный срок сегодня, предварительно 2-3 недели.",
+            "Поддержка считается по факту трудозатрат, можем предложить фиксированный пакет часов.",
+            "Даем гарантию на исправление дефектов в рамках договорённых требований.",
+            "Да, есть кейсы, могу выслать краткое резюме и результаты по похожим проектам."
+        ]
+        if let q = sampleQuestions.randomElement(), let a = sampleAnswers.randomElement() {
+            let engagement = Double.random(in: 0.25...0.95)
+            viewModel.showHint(question: q, answer: a, engagement: engagement)
+        }
+        hintWindowController?.show()
     }
     
     @objc private func toggleRecording() {

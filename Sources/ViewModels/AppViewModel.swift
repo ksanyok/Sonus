@@ -13,6 +13,7 @@ class AppViewModel: ObservableObject {
     @Published var draftCategory: SessionCategory = .personal
     @Published var hints: [HintItem] = []
     @Published var currentHintIndex: Int = 0
+    @Published var engagement: Double = 0.7 // 0..1, влияет на цвет пузыря
     
     // Dependencies
     private let persistence = PersistenceService.shared
@@ -25,6 +26,17 @@ class AppViewModel: ObservableObject {
         // Bind sessions from persistence
         persistence.$sessions
             .assign(to: \.sessions, on: self)
+            .store(in: &cancellables)
+
+        // Подписка на внешние подсказки (для будущих realtime моделей)
+        NotificationCenter.default.publisher(for: .newHint)
+            .sink { [weak self] note in
+                guard let self else { return }
+                let question = note.userInfo?["question"] as? String ?? "Вопрос не распознан"
+                let answer = note.userInfo?["answer"] as? String ?? "Попробуйте уточнить детали запроса."
+                let engagement = note.userInfo?["engagement"] as? Double
+                self.showHint(question: question, answer: answer, engagement: engagement)
+            }
             .store(in: &cancellables)
     }
     
@@ -130,12 +142,13 @@ class AppViewModel: ObservableObject {
         }
     }
 
-    func showHint(question: String, answer: String) {
+    func showHint(question: String, answer: String, engagement: Double? = nil) {
         let newHint = HintItem(id: UUID(), question: question, answer: answer, createdAt: Date())
         withAnimation(.spring()) {
             hints.append(newHint)
             if hints.count > 20 { hints.removeFirst() }
             currentHintIndex = max(hints.count - 1, 0)
+            if let engagement { updateEngagement(engagement) }
         }
     }
 
@@ -143,6 +156,7 @@ class AppViewModel: ObservableObject {
         withAnimation(.easeInOut) {
             hints.removeAll()
             currentHintIndex = 0
+            engagement = 0.7
         }
     }
 
@@ -164,6 +178,10 @@ class AppViewModel: ObservableObject {
             currentHintIndex = (currentHintIndex - 1 + hints.count) % hints.count
         }
     }
+
+    func updateEngagement(_ value: Double) {
+        engagement = min(1.0, max(0.0, value))
+    }
 }
 
 struct HintItem: Identifiable, Equatable, Hashable {
@@ -171,4 +189,8 @@ struct HintItem: Identifiable, Equatable, Hashable {
     let question: String
     let answer: String
     let createdAt: Date
+}
+
+extension Notification.Name {
+    static let newHint = Notification.Name("com.sonus.hint.new")
 }
