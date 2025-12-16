@@ -10,25 +10,34 @@ struct SonusLogo: View {
         HStack(spacing: 10) {
             SonusWaveMark(phase: phase)
                 .stroke(
-                    LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing),
-                    style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+                    LinearGradient(colors: [.blue, .purple, .pink], startPoint: .leading, endPoint: .trailing),
+                    style: StrokeStyle(lineWidth: size * 0.12, lineCap: .round, lineJoin: .round)
                 )
                 .frame(width: size, height: size)
-                .onAppear {
-                    withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                        phase = 1
-                    }
-                    withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
-                        textOpacity = 1
-                    }
-                }
+                .shadow(color: .purple.opacity(0.5), radius: 5, x: 0, y: 0)
 
             Text("Sonus")
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(.system(size: size, weight: .bold, design: .rounded))
                 .tracking(0.8)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.primary, .blue, .purple],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .hueRotation(.degrees(phase * 20))
                 .opacity(textOpacity)
         }
         .accessibilityLabel("Sonus")
+        .onAppear {
+            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+            withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
+                textOpacity = 1
+            }
+        }
     }
 }
 

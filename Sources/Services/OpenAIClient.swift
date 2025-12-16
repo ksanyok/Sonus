@@ -24,7 +24,7 @@ enum OpenAIError: Error, LocalizedError {
 class OpenAIClient {
     static let shared = OpenAIClient()
     /// Bump when the analysis JSON schema / prompts change in a way that should trigger re-analysis.
-    static let analysisSchemaVersion: Int = 3
+    static let analysisSchemaVersion: Int = 4
     private let baseURL = "https://api.openai.com/v1"
 
     private lazy var session: URLSession = {
@@ -254,7 +254,7 @@ class OpenAIClient {
                 - Все текстовые поля пиши на русском.
 
                 Обязательные поля:
-                - summary: краткое резюме.
+                - summary: подробное резюме (Executive Summary), включающее ключевые обсужденные темы, принятые решения и общий контекст.
                 - sentiment: "Positive" | "Neutral" | "Negative".
                 - score: 0..100 (общее качество/успешность разговора).
                 - participants: массив строк (имена/роли, если можно понять).
@@ -277,6 +277,21 @@ class OpenAIClient {
                         structure: "structured"|"mixed"|"chaotic",
                         conflictLevel: 0..100
                     }
+                - managerGuidance: объект {
+                        persuasionTechniques: массив строк (как можно было переубедить),
+                        engagementTips: массив строк (как повысить вовлеченность),
+                        conflictAvoidance: массив строк (как избежать конфликтов),
+                        emotionHandling: массив строк (работа с эмоциями),
+                        generalAdvice: массив строк,
+                        alternativeScenarios: массив строк (как могла пойти беседа),
+                        specificExamples: массив строк (конкретные примеры "как надо было")
+                    }
+                - triggers: массив объектов {
+                        type: "profanity"|"sarcasm"|"stop_word"|"buying_signal",
+                        text: строка,
+                        timeHint: строка (примерное время),
+                        context: строка (контекст фразы)
+                    }
                 - client: объект {
                         label, name, role, company, title,
                         contact: {emails:[...], phones:[...], messengers:[...]},
@@ -295,8 +310,21 @@ class OpenAIClient {
                         decisionMakers:[...], decisionProcess,
                         buyingSignals:[...], risks:[...]
                     }
-                - keyMoments: массив объектов {speaker, text, type, timeHint}
-                - actionItems: массив объектов {title, owner, dueDateISO, priority, notes}
+                - keyMoments: массив объектов {
+                        speaker, 
+                        text, 
+                        type, 
+                        timeHint,
+                        recommendation: строка (совет, как можно было сказать лучше или что сделать),
+                        severity: "info"|"warning"|"critical" (насколько критичен момент)
+                    }
+                - actionItems: массив объектов {
+                        title: строка (четкая формулировка задачи), 
+                        owner: строка (кто делает), 
+                        dueDateISO, 
+                        priority, 
+                        notes: строка (контекст задачи: почему это нужно сделать, на основе чего решили)
+                    }
                 - commitments: массив объектов {title, owner, dueDateISO, notes, confidence}
                     (это именно обещания/договорённости: "я пришлю", "мы покажем", "вышлем КП", "сделаем демо" и т.п.)
                 - conversationMetrics: объект {

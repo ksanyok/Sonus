@@ -106,6 +106,7 @@ struct Analysis: Codable, Equatable, Hashable {
 
     // Extended fields (optional; may be absent depending on transcript quality)
     var communicationStyle: CommunicationStyle?
+    var managerGuidance: ManagerGuidance?
     var client: ParticipantProfile?
     var otherParticipants: [ParticipantProfile]?
     var extractedEntities: ExtractedEntities?
@@ -114,6 +115,7 @@ struct Analysis: Codable, Equatable, Hashable {
     var actionItems: [ActionItem] = []
     var commitments: [Commitment] = []
     var conversationMetrics: ConversationMetrics?
+    var triggers: [ConversationTrigger]?
 
     // Per-speaker insights (optional)
     var speakerInsights: [SpeakerInsight] = []
@@ -133,6 +135,7 @@ struct Analysis: Codable, Equatable, Hashable {
          customerIntent: String,
          criteria: [EvaluationCriterion] = [],
          communicationStyle: CommunicationStyle? = nil,
+         managerGuidance: ManagerGuidance? = nil,
          client: ParticipantProfile? = nil,
          otherParticipants: [ParticipantProfile]? = nil,
          extractedEntities: ExtractedEntities? = nil,
@@ -141,6 +144,7 @@ struct Analysis: Codable, Equatable, Hashable {
             actionItems: [ActionItem] = [],
             commitments: [Commitment] = [],
             conversationMetrics: ConversationMetrics? = nil,
+            triggers: [ConversationTrigger]? = nil,
             speakerInsights: [SpeakerInsight] = []) {
         self.summary = summary
         self.sentiment = sentiment
@@ -156,6 +160,7 @@ struct Analysis: Codable, Equatable, Hashable {
         self.recommendations = recommendations
         self.customerIntent = customerIntent
         self.criteria = criteria
+        self.managerGuidance = managerGuidance
         self.communicationStyle = communicationStyle
         self.client = client
         self.otherParticipants = otherParticipants
@@ -165,6 +170,7 @@ struct Analysis: Codable, Equatable, Hashable {
         self.actionItems = actionItems
         self.commitments = commitments
         self.conversationMetrics = conversationMetrics
+        self.triggers = triggers
         self.speakerInsights = speakerInsights
     }
     
@@ -184,7 +190,8 @@ struct Analysis: Codable, Equatable, Hashable {
         recommendations = (try? c.decode([String].self, forKey: .recommendations)) ?? []
         customerIntent = (try? c.decode(String.self, forKey: .customerIntent)) ?? ""
         criteria = (try? c.decode([EvaluationCriterion].self, forKey: .criteria)) ?? []
-
+managerGuidance = try? c.decode(ManagerGuidance.self, forKey: .managerGuidance)
+        
         communicationStyle = try? c.decode(CommunicationStyle.self, forKey: .communicationStyle)
         client = try? c.decode(ParticipantProfile.self, forKey: .client)
         otherParticipants = try? c.decode([ParticipantProfile].self, forKey: .otherParticipants)
@@ -194,6 +201,7 @@ struct Analysis: Codable, Equatable, Hashable {
         actionItems = (try? c.decode([ActionItem].self, forKey: .actionItems)) ?? []
         commitments = (try? c.decode([Commitment].self, forKey: .commitments)) ?? []
         conversationMetrics = try? c.decode(ConversationMetrics.self, forKey: .conversationMetrics)
+        triggers = try? c.decode([ConversationTrigger].self, forKey: .triggers)
 
         speakerInsights = (try? c.decode([SpeakerInsight].self, forKey: .speakerInsights)) ?? []
     }
@@ -310,6 +318,23 @@ struct CommunicationStyle: Codable, Equatable, Hashable {
     var conflictLevel: Int? // 0-100
 }
 
+struct ManagerGuidance: Codable, Equatable, Hashable {
+    var persuasionTechniques: [String]? // Как можно было переубедить
+    var engagementTips: [String]? // Как повысить вовлеченность
+    var conflictAvoidance: [String]? // Как избежать конфликтов
+    var emotionHandling: [String]? // Работа с эмоциями
+    var generalAdvice: [String]? // Общие советы
+    var alternativeScenarios: [String]? // Как могла пойти беседа
+    var specificExamples: [String]? // Конкретные примеры "как надо было"
+}
+
+struct ConversationTrigger: Codable, Equatable, Hashable {
+    var type: String // "profanity", "sarcasm", "stop_word", "buying_signal"
+    var text: String
+    var timeHint: String?
+    var context: String?
+}
+
 struct ExtractedEntities: Codable, Equatable, Hashable {
     var companies: [String]?
     var people: [String]?
@@ -343,8 +368,10 @@ struct ClientInsights: Codable, Equatable, Hashable {
 struct KeyMoment: Codable, Equatable, Hashable {
     var speaker: String?
     var text: String
-    var type: String? // e.g. "objection" | "agreement" | "requirement" | "deadline"
+    var type: String? // e.g. "objection" | "agreement" | "requirement" | "deadline" | "risk" | "buying_signal"
     var timeHint: String? // e.g. "00:12:34" when possible
+    var recommendation: String? // Recommendation for this specific moment (e.g. how to handle the objection)
+    var severity: String? // "low" | "medium" | "high"
 }
 
 struct ActionItem: Codable, Equatable, Hashable {

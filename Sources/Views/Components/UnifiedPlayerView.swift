@@ -60,7 +60,7 @@ struct UnifiedPlayerView: View {
                             )
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.blue.opacity(0.3), .purple.opacity(0.3)],
+                                    colors: [.blue.opacity(0.5), .purple.opacity(0.5)],
                                     startPoint: .bottom,
                                     endPoint: .top
                                 )
@@ -77,27 +77,28 @@ struct UnifiedPlayerView: View {
                         .fill(Color.secondary.opacity(0.1))
                         .frame(height: 64)
                 }
-
-                // Progress Fill
+                
+                // Progress Fill (Overlay)
                 GeometryReader { geo in
                     let width = geo.size.width
                     let duration = max(1, session.duration)
                     let currentX = width * CGFloat((isDragging ? dragTime : audioPlayer.currentTime) / duration)
 
                     ZStack(alignment: .leading) {
+                        // Masked fill for played portion
                         Rectangle()
                             .fill(
-                                LinearGradient(colors: [.blue.opacity(0.1), .purple.opacity(0.1)], startPoint: .leading, endPoint: .trailing)
+                                LinearGradient(colors: [.blue.opacity(0.2), .purple.opacity(0.2)], startPoint: .leading, endPoint: .trailing)
                             )
                             .frame(width: currentX, height: 64)
-                            .cornerRadius(12) // This might clip the right edge weirdly if not careful, but acceptable for now
+                            .cornerRadius(12)
                         
                         // Playhead Line
-                        Rectangle()
+                        Capsule()
                             .fill(LinearGradient(colors: [.blue, .purple], startPoint: .top, endPoint: .bottom))
-                            .frame(width: 2, height: 64)
+                            .frame(width: 4, height: 64)
                             .position(x: currentX, y: 32)
-                            .shadow(radius: 2)
+                            .shadow(color: .purple.opacity(0.5), radius: 4, x: 0, y: 0)
                     }
                     
                     // Interaction Layer
@@ -120,6 +121,23 @@ struct UnifiedPlayerView: View {
                         )
                 }
                 .frame(height: 64)
+                
+                // Key Moments Markers (Top Layer)
+                if let analysis = analysis {
+                    GeometryReader { geo in
+                        let width = geo.size.width
+                        let duration = max(1, session.duration)
+                        
+                        ForEach(Array(analysis.keyMoments.enumerated()), id: \.offset) { _, moment in
+                            if let time = parseTimeHint(moment.timeHint), time <= duration {
+                                let x = width * CGFloat(time / duration)
+                                MarkerButton(moment: moment, x: x)
+                            }
+                        }
+                    }
+                    .frame(height: 64)
+                    .allowsHitTesting(true) // Allow interaction with markers
+                }
             }
             .padding(.horizontal)
         }
@@ -127,5 +145,87 @@ struct UnifiedPlayerView: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(20)
         .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
+    }
+    
+    private func parseTimeHint(_ hint: String?) -> TimeInterval? {
+        guard let hint = hint, !hint.isEmpty else { return nil }
+        let parts = hint.split(separator: ":").map { Double($0) ?? 0 }
+        if parts.count == 3 {
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        } else if parts.count == 2 {
+            return parts[0] * 60 + parts[1]
+        }
+        return nil
+    }
+}
+
+struct MarkerButton: View {
+    let moment: KeyMoment
+    let x: CGFloat
+    @State private var isHovered = false
+    
+    var markerColor: Color {
+        switch moment.severity {
+        case "critical": return .red
+        case "warning": return .orange
+        case "info": return .blue
+        default: return .orange
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            Image(systemName: "bookmark.fill")
+                .font(.system(size: 12))
+                .foregroundColor(markerColor)
+                .background(Circle().fill(.white).frame(width: 16, height: 16))
+                .shadow(radius: 2)
+                .scaleEffect(isHovered ? 1.5 : 1.0)
+                .animation(.spring(), value: isHovered)
+            
+            if isHovered {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(moment.type?.uppercased() ?? "MOMENT")
+                            .font(.caption2.bold())
+                            .foregroundColor(markerColor)
+                        Spacer()
+                        if let sev = moment.severity {
+                            Text(sev.uppercased())
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Text(moment.text)
+                        .font(.caption)
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    if let rec = moment.recommendation, !rec.isEmpty {
+                        Divider()
+                        HStack(alignment: .top, spacing: 4) {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.caption2)
+                                .foregroundColor(.yellow)
+                            Text(rec)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(8)
+                .frame(width: 220)
+                .background(Color(nsColor: .windowBackgroundColor))
+                .cornerRadius(8)
+                .shadow(radius: 4)
+                .offset(y: -80) // Show above the marker
+            }
+        }
+        .position(x: x, y: 32) // Centered vertically in the 64px height
+        .onHover { hover in
+            isHovered = hover
+        }
     }
 }
