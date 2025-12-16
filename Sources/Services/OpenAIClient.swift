@@ -234,7 +234,7 @@ class OpenAIClient {
         return try JSONDecoder().decode(LiveHintResponse.self, from: data)
     }
     
-    func analyze(text: String) async throws -> Analysis {
+    func analyze(text: String, playbook: Playbook = .sales, customVocabulary: String = "") async throws -> Analysis {
         guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
 
         let condensed = try await condensedTranscriptIfNeeded(text)
@@ -246,7 +246,14 @@ class OpenAIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
                 let prompt = """
-                Проанализируй стенограмму разговора (чаще всего — продажа/переговоры). Верни СТРОГО JSON (без Markdown), с полями ниже.
+                Проанализируй стенограмму разговора.
+                
+                Сценарий анализа: \(playbook.displayName)
+                Инструкция: \(playbook.promptInstruction)
+                
+                Словарь (термины, которые могут встречаться): \(customVocabulary)
+
+                Верни СТРОГО JSON (без Markdown), с полями ниже.
 
                 Важно:
                 - Если данных нет, ставь null или пустой массив.

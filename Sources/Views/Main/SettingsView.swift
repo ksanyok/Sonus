@@ -4,6 +4,7 @@ import Carbon
 
 struct SettingsView: View {
     @EnvironmentObject var l10n: LocalizationService
+    @EnvironmentObject var viewModel: AppViewModel
     @State private var apiKey: String = ""
     @State private var micPermissionStatus: AVAuthorizationStatus = .notDetermined
     @State private var showSaveSuccess = false
@@ -98,6 +99,34 @@ struct SettingsView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
                 
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(l10n.t("Analysis Settings", ru: "Настройки анализа"))
+                        .font(.headline)
+                    
+                    Picker(l10n.t("Default Playbook", ru: "Сценарий по умолчанию"), selection: $viewModel.selectedPlaybook) {
+                        ForEach(Playbook.allCases) { playbook in
+                            Text(playbook.displayName).tag(playbook)
+                        }
+                    }
+                    
+                    Text(l10n.t("Custom Vocabulary", ru: "Словарь компании"))
+                        .font(.subheadline)
+                    TextEditor(text: $viewModel.customVocabulary)
+                        .font(.body)
+                        .frame(height: 60)
+                        .padding(4)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                        
+                    Text(l10n.t("Add product names, competitors, or slang (comma separated).", ru: "Добавьте названия продуктов, конкурентов или сленг (через запятую)."))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+
                 VStack(alignment: .leading, spacing: 12) {
                     Text(l10n.t("Hotkey", ru: "Хоткей"))
                         .font(.headline)

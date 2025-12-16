@@ -21,6 +21,20 @@ struct SidebarView: View {
             ) { selection = .history }
             
             SidebarButton(
+                title: l10n.t("Analytics", ru: "Аналитика"),
+                icon: "chart.bar.fill",
+                color: .purple,
+                isSelected: selection == .analytics
+            ) { selection = .analytics }
+
+            SidebarButton(
+                title: l10n.t("Search", ru: "Поиск"),
+                icon: "magnifyingglass",
+                color: .orange,
+                isSelected: selection == .search
+            ) { selection = .search }
+            
+            SidebarButton(
                 title: l10n.t("Settings", ru: "Настройки"),
                 icon: "gear",
                 color: .gray,
@@ -83,5 +97,7 @@ struct SidebarButton: View {
 enum SidebarItem: Hashable {
     case record
     case history
+    case analytics
+    case search
     case settings
 }

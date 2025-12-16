@@ -18,6 +18,10 @@ struct MainWindow: View {
                     HistoryView(viewModel: viewModel) { session in
                         navigationPath.append(session.id)
                     }
+                case .analytics:
+                    DashboardView()
+                case .search:
+                    GlobalSearchView()
                 case .settings:
                     SettingsView()
                 case .none:

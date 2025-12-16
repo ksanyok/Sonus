@@ -130,6 +130,7 @@ struct SonusApp: App {
     var body: some Scene {
         WindowGroup("Sonus", id: "main") {
             MainWindow(viewModel: viewModel)
+                .environmentObject(viewModel)
                 .environmentObject(l10n)
                 .environment(\.locale, l10n.locale)
                 .onAppear {

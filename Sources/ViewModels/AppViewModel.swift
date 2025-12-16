@@ -20,6 +20,24 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
     @Published var processingStatus: [UUID: String] = [:]
     @Published var processingProgress: [UUID: Double] = [:]
     
+    @Published var selectedPlaybook: Playbook = {
+        if let saved = UserDefaults.standard.string(forKey: "selectedPlaybook"),
+           let playbook = Playbook(rawValue: saved) {
+            return playbook
+        }
+        return .sales
+    }() {
+        didSet {
+            UserDefaults.standard.set(selectedPlaybook.rawValue, forKey: "selectedPlaybook")
+        }
+    }
+    
+    @Published var customVocabulary: String = UserDefaults.standard.string(forKey: "customVocabulary") ?? "" {
+        didSet {
+            UserDefaults.standard.set(customVocabulary, forKey: "customVocabulary")
+        }
+    }
+    
     // Dependencies
     private let persistence = PersistenceService.shared
     let audioRecorder = AudioRecorder()
@@ -284,7 +302,7 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                     self?.processingStatus[session.id] = "Анализ (JSON)…"
                     self?.processingProgress[session.id] = 0.92
                 }
-                let analysis = try await openAI.analyze(text: transcript)
+                let analysis = try await openAI.analyze(text: transcript, playbook: self.selectedPlaybook, customVocabulary: self.customVocabulary)
                 
                 updatedSession.analysis = analysis
                 updatedSession.analysisUpdatedAt = Date()

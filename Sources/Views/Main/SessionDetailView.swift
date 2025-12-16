@@ -164,6 +164,20 @@ struct SessionHeaderView: View {
             
             VStack(alignment: .trailing, spacing: 10) {
                 HStack(spacing: 10) {
+                    if session.analysis != nil {
+                        Button(action: {
+                            PDFExportService.shared.exportPDF(for: session) { url in
+                                if let url = url {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                        }) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                        .help(l10n.t("Export PDF", ru: "Экспорт PDF"))
+                    }
+                    
                     AnalyzeActionButton(
                         isProcessing: session.isProcessing,
                         lastAnalyzedAt: session.analysisUpdatedAt,
