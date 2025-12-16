@@ -1,0 +1,51 @@
+import SwiftUI
+
+struct MiniWindow: View {
+    @ObservedObject var viewModel: AppViewModel
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            if viewModel.audioRecorder.isRecording {
+                Text(formatDuration(viewModel.audioRecorder.recordingDuration))
+                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                    .contentTransition(.numericText())
+                
+                VisualizerView(levels: viewModel.audioRecorder.audioLevels)
+                    .frame(height: 30)
+                
+                Button(action: viewModel.stopRecording) {
+                    Image(systemName: "stop.fill")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.red)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: viewModel.startRecording) {
+                    Image(systemName: "mic.fill")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.red)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                
+                Text("Ready")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .frame(width: 160, height: 120)
+        .background(.ultraThinMaterial)
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
