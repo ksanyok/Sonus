@@ -112,6 +112,9 @@ struct Analysis: Codable, Equatable, Hashable {
     var actionItems: [ActionItem] = []
     var commitments: [Commitment] = []
     var conversationMetrics: ConversationMetrics?
+
+    // Per-speaker insights (optional)
+    var speakerInsights: [SpeakerInsight] = []
     
     init(summary: String,
          sentiment: String,
@@ -135,7 +138,8 @@ struct Analysis: Codable, Equatable, Hashable {
          keyMoments: [KeyMoment] = [],
             actionItems: [ActionItem] = [],
             commitments: [Commitment] = [],
-            conversationMetrics: ConversationMetrics? = nil) {
+            conversationMetrics: ConversationMetrics? = nil,
+            speakerInsights: [SpeakerInsight] = []) {
         self.summary = summary
         self.sentiment = sentiment
         self.score = score
@@ -159,6 +163,7 @@ struct Analysis: Codable, Equatable, Hashable {
         self.actionItems = actionItems
         self.commitments = commitments
         self.conversationMetrics = conversationMetrics
+        self.speakerInsights = speakerInsights
     }
     
     init(from decoder: Decoder) throws {
@@ -187,6 +192,94 @@ struct Analysis: Codable, Equatable, Hashable {
         actionItems = (try? c.decode([ActionItem].self, forKey: .actionItems)) ?? []
         commitments = (try? c.decode([Commitment].self, forKey: .commitments)) ?? []
         conversationMetrics = try? c.decode(ConversationMetrics.self, forKey: .conversationMetrics)
+
+        speakerInsights = (try? c.decode([SpeakerInsight].self, forKey: .speakerInsights)) ?? []
+    }
+}
+
+struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var role: String?
+
+    // Scores 0..100 (nullable if uncertain)
+    var activityScore: Int?
+    var competenceScore: Int?
+    var emotionControlScore: Int?
+    var conflictHandlingScore: Int?
+
+    // Signals
+    var ideasAndProposals: [String]?
+    var strengths: [String]?
+    var risks: [String]?
+    var evidenceQuotes: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case role
+        case activityScore
+        case competenceScore
+        case emotionControlScore
+        case conflictHandlingScore
+        case ideasAndProposals
+        case strengths
+        case risks
+        case evidenceQuotes
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        role: String? = nil,
+        activityScore: Int? = nil,
+        competenceScore: Int? = nil,
+        emotionControlScore: Int? = nil,
+        conflictHandlingScore: Int? = nil,
+        ideasAndProposals: [String]? = nil,
+        strengths: [String]? = nil,
+        risks: [String]? = nil,
+        evidenceQuotes: [String]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.role = role
+        self.activityScore = activityScore
+        self.competenceScore = competenceScore
+        self.emotionControlScore = emotionControlScore
+        self.conflictHandlingScore = conflictHandlingScore
+        self.ideasAndProposals = ideasAndProposals
+        self.strengths = strengths
+        self.risks = risks
+        self.evidenceQuotes = evidenceQuotes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        role = try? c.decode(String.self, forKey: .role)
+        activityScore = try? c.decode(Int.self, forKey: .activityScore)
+        competenceScore = try? c.decode(Int.self, forKey: .competenceScore)
+        emotionControlScore = try? c.decode(Int.self, forKey: .emotionControlScore)
+        conflictHandlingScore = try? c.decode(Int.self, forKey: .conflictHandlingScore)
+        ideasAndProposals = try? c.decode([String].self, forKey: .ideasAndProposals)
+        strengths = try? c.decode([String].self, forKey: .strengths)
+        risks = try? c.decode([String].self, forKey: .risks)
+        evidenceQuotes = try? c.decode([String].self, forKey: .evidenceQuotes)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(role, forKey: .role)
+        try c.encodeIfPresent(activityScore, forKey: .activityScore)
+        try c.encodeIfPresent(competenceScore, forKey: .competenceScore)
+        try c.encodeIfPresent(emotionControlScore, forKey: .emotionControlScore)
+        try c.encodeIfPresent(conflictHandlingScore, forKey: .conflictHandlingScore)
+        try c.encodeIfPresent(ideasAndProposals, forKey: .ideasAndProposals)
+        try c.encodeIfPresent(strengths, forKey: .strengths)
+        try c.encodeIfPresent(risks, forKey: .risks)
+        try c.encodeIfPresent(evidenceQuotes, forKey: .evidenceQuotes)
     }
 }
 
@@ -282,4 +375,32 @@ struct EvaluationCriterion: Codable, Equatable, Hashable, Identifiable {
     let name: String
     let score: Int // 0-10
     let comment: String
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case score
+        case comment
+    }
+
+    init(name: String, score: Int, comment: String) {
+        self.id = UUID()
+        self.name = name
+        self.score = score
+        self.comment = comment
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        score = (try? c.decode(Int.self, forKey: .score)) ?? 0
+        comment = (try? c.decode(String.self, forKey: .comment)) ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(score, forKey: .score)
+        try c.encode(comment, forKey: .comment)
+    }
 }

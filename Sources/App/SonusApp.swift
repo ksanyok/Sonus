@@ -9,8 +9,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hintWindowController: HintWindowController?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // If another instance is already running, quit this one to avoid duplicates
-        if let bundleID = Bundle.main.bundleIdentifier,
+        // If another instance is already running, quit this one to avoid duplicates.
+        // When launched via SwiftPM (`swift run`), the process isn't a real .app bundle and
+        // this check can produce false positives and immediately terminate the app.
+        if Bundle.main.bundleURL.pathExtension == "app",
+           let bundleID = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).count > 1 {
             NSApp.terminate(nil)
             return

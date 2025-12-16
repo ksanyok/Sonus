@@ -104,6 +104,8 @@ struct SessionDetailView: View {
                             Text(l10n.t("Analysis", ru: "Анализ")).tag(1)
                             Text(l10n.t("Reminders", ru: "Напоминания")).tag(2)
                             Text(l10n.t("Transcript", ru: "Транскрипт")).tag(3)
+                            Text(l10n.t("Timeline", ru: "Таймлайн")).tag(4)
+                            Text(l10n.t("Speakers", ru: "Собеседники")).tag(5)
                         }
                         .pickerStyle(.segmented)
                         .padding()
@@ -116,8 +118,16 @@ struct SessionDetailView: View {
                                     DetailedAnalysisView(analysis: analysis)
                                 } else if selectedTab == 2 {
                                     RemindersView(analysis: analysis)
-                                } else {
+                                } else if selectedTab == 3 {
                                     TranscriptView(transcript: session.transcript)
+                                } else if selectedTab == 4 {
+                                    TimelineView(
+                                        transcript: session.transcript ?? "",
+                                        duration: session.duration,
+                                        keyMoments: analysis.keyMoments
+                                    )
+                                } else {
+                                    SpeakerInsightsView(insights: analysis.speakerInsights)
                                 }
                             }
                             .padding()
