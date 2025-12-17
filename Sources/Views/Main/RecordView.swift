@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RecordView: View {
     @ObservedObject var viewModel: AppViewModel
@@ -247,6 +248,17 @@ struct RecordView: View {
                                         .buttonStyle(.bordered)
                                         .tint(.red)
                                     }
+                                    
+                                    Button {
+                                        importAudio()
+                                    } label: {
+                                        Label(l10n.t("Import Audio / Voice Memo", ru: "Загрузить аудио / Диктофон"), systemImage: "square.and.arrow.down")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .tint(.secondary)
+                                    .help(l10n.t("Import audio file or drag & drop here", ru: "Загрузить файл или перетащите сюда"))
                                 }
                                 .padding(22)
                             )
@@ -256,6 +268,17 @@ struct RecordView: View {
                 }
             }
             .padding(24)
+        }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url = url {
+                    DispatchQueue.main.async {
+                        viewModel.importAudio(from: url)
+                    }
+                }
+            }
+            return true
         }
         .onAppear {
             viewModel.prewarmRecording()
@@ -276,6 +299,20 @@ struct RecordView: View {
         let minutes = Int(timeInterval) / 60
         let seconds = Int(timeInterval) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    private func importAudio() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = l10n.t("Select an audio file or Voice Memo", ru: "Выберите аудиофайл или запись диктофона")
+        
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                viewModel.importAudio(from: url)
+            }
+        }
     }
 }
 

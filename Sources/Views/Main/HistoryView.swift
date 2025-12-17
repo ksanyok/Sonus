@@ -144,6 +144,12 @@ struct SessionCard: View {
                 }
                 
                 HStack {
+                    // Source Icon
+                    Label(l10n.t(session.resolvedSource.labelEn, ru: session.resolvedSource.labelRu), systemImage: session.resolvedSource.icon)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 4)
+                    
                     Text(session.date.formatted(date: .abbreviated, time: .shortened))
                     Text("•")
                     Text(formatDuration(session.duration))

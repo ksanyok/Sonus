@@ -13,6 +13,11 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
     var isProcessing: Bool = false
     var category: SessionCategory = .personal
     var customTitle: String? = nil
+    var source: SessionSource? = nil
+    
+    var resolvedSource: SessionSource {
+        source ?? .recording
+    }
     
     var title: String {
         if let customTitle = customTitle, !customTitle.isEmpty {
@@ -31,6 +36,32 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
     
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+enum SessionSource: String, Codable {
+    case recording
+    case importFile
+    
+    var icon: String {
+        switch self {
+        case .recording: return "mic.fill"
+        case .importFile: return "square.and.arrow.down.fill"
+        }
+    }
+    
+    var labelEn: String {
+        switch self {
+        case .recording: return "Recording"
+        case .importFile: return "Imported"
+        }
+    }
+    
+    var labelRu: String {
+        switch self {
+        case .recording: return "Запись"
+        case .importFile: return "Импорт"
+        }
     }
 }
 

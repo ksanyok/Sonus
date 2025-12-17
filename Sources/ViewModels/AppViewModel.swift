@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import AVFoundation
 
 final class AppViewModel: ObservableObject, @unchecked Sendable {
     @Published var sessions: [Session] = []
@@ -150,7 +151,8 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                 analysisSchemaVersion: nil,
                 isProcessing: false,
                 category: draftCategory,
-                customTitle: draftTitle.isEmpty ? nil : draftTitle
+                customTitle: draftTitle.isEmpty ? nil : draftTitle,
+                source: .recording
             )
             persistence.saveSession(newSession)
             // reset drafts
@@ -163,6 +165,58 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
         }
 
         stopLivePipeline()
+    }
+    
+    func importAudio(from url: URL) {
+        let fileManager = FileManager.default
+        let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let newFilename = UUID().uuidString + ".m4a" // Convert or just copy? Ideally convert to m4a if needed, but copy is safer for now.
+        // Actually, let's keep original extension or use m4a if we can.
+        // For simplicity, let's use the original extension or .m4a if we convert.
+        // But `Session` expects `audioFilename` which is relative to Documents.
+        
+        let destinationURL = documentsPath.appendingPathComponent(newFilename)
+        
+        do {
+            // Check if we need to convert or just copy.
+            // For now, simple copy. If format is not supported, AVPlayer might fail.
+            // Ideally we should transcode to m4a/aac, but let's start with copy.
+            try fileManager.copyItem(at: url, to: destinationURL)
+            
+            // Get duration
+            let asset = AVURLAsset(url: destinationURL)
+            let duration = CMTimeGetSeconds(asset.duration)
+            
+            let newSession = Session(
+                id: UUID(),
+                date: Date(),
+                duration: duration,
+                audioFilename: newFilename,
+                transcript: nil,
+                analysis: nil,
+                analysisUpdatedAt: nil,
+                analysisSchemaVersion: nil,
+                isProcessing: false,
+                category: draftCategory, // Use current draft category
+                customTitle: draftTitle.isEmpty ? url.deletingPathExtension().lastPathComponent : draftTitle,
+                source: .importFile
+            )
+            
+            persistence.saveSession(newSession)
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.draftTitle = ""
+                self?.draftCategory = .personal
+                // Optionally select the new session
+                // self?.selectedSession = newSession
+            }
+            
+        } catch {
+            DispatchQueue.main.async { [weak self] in
+                self?.errorMessage = "Failed to import audio: \(error.localizedDescription)"
+                self?.showError = true
+            }
+        }
     }
 
     private func startLivePipelineIfNeeded() {
