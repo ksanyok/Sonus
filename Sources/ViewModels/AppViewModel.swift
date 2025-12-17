@@ -193,12 +193,14 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
             }
 
             let fileManager = FileManager.default
-            let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let originalExt = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
             let newFilename = UUID().uuidString + "." + originalExt
-            let destinationURL = documentsPath.appendingPathComponent(newFilename)
+            let destinationURL = persistence.getAudioURL(for: newFilename)
 
             do {
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try? fileManager.removeItem(at: destinationURL)
+                }
                 try fileManager.copyItem(at: url, to: destinationURL)
 
                 let duration = await AudioDurationUtils.loadDurationSeconds(url: destinationURL)

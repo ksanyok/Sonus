@@ -106,6 +106,10 @@ struct SessionCard: View {
     @EnvironmentObject private var l10n: LocalizationService
     @State private var isHovering = false
 
+    private var audioSizeString: String? {
+        PersistenceService.shared.audioFileSizeString(for: session.audioFilename)
+    }
+
     private var needsUpdate: Bool {
         guard session.analysis != nil else { return false }
         return (session.analysisSchemaVersion ?? 0) < OpenAIClient.analysisSchemaVersion
@@ -128,17 +132,19 @@ struct SessionCard: View {
                 Text(session.title)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.primary)
-                
-                HStack {
-                    // Source Icon
+
+                HStack(spacing: 10) {
                     Label(l10n.t(session.resolvedSource.labelEn, ru: session.resolvedSource.labelRu), systemImage: session.resolvedSource.icon)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                        .padding(.trailing, 4)
-                    
                     Text(session.date.formatted(date: .abbreviated, time: .shortened))
-                    Text("•")
-                    Text(formatDuration(session.duration))
+                }
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+
+                HStack(spacing: 10) {
+                    Label(formatDuration(session.duration), systemImage: "clock")
+                    if let size = audioSizeString {
+                        Label(size, systemImage: "internaldrive")
+                    }
                 }
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)

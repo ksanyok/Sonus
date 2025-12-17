@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Carbon
+import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var l10n: LocalizationService
@@ -16,6 +17,8 @@ struct SettingsView: View {
     @State private var useShift = true
     @State private var useOption = false
     @State private var useControl = false
+    @State private var audioFolderName: String = PersistenceService.shared.audioStorageDirectory.lastPathComponent
+    @State private var audioFolderPath: String = PersistenceService.shared.audioStorageDirectoryPath
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -36,6 +39,37 @@ struct SettingsView: View {
                     Text(l10n.t("Applies immediately inside the app.", ru: "Применяется сразу внутри приложения."))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(l10n.t("Storage", ru: "Хранилище"))
+                        .font(.headline)
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(l10n.t("Audio folder", ru: "Папка аудио"))
+                        Spacer()
+                        Text(audioFolderName)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Text(audioFolderPath)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .textSelection(.enabled)
+
+                    HStack(spacing: 10) {
+                        Button(l10n.t("Reveal in Finder", ru: "Показать в Finder")) {
+                            PersistenceService.shared.revealAudioStorageDirectoryInFinder()
+                        }
+                        Button(l10n.t("Change…", ru: "Изменить…")) {
+                            pickAudioStorageDirectory()
+                        }
+                        Spacer()
+                    }
                 }
                 .padding()
                 .background(Color(nsColor: .controlBackgroundColor))
@@ -240,6 +274,7 @@ struct SettingsView: View {
         .onAppear {
             loadSettings()
             checkMicPermission()
+            refreshAudioFolderUI()
         }
     }
     
@@ -302,6 +337,31 @@ struct SettingsView: View {
                 checkMicPermission()
             }
         }
+    }
+
+    private func pickAudioStorageDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = l10n.t("Choose", ru: "Выбрать")
+        panel.title = l10n.t("Choose Audio Storage Folder", ru: "Выберите папку для хранения аудио")
+
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try PersistenceService.shared.setAudioStorageDirectory(url)
+                refreshAudioFolderUI()
+            } catch {
+                viewModel.errorMessage = l10n.t("Failed to set audio folder: ", ru: "Не удалось выбрать папку аудио: ") + error.localizedDescription
+                viewModel.showError = true
+            }
+        }
+    }
+
+    private func refreshAudioFolderUI() {
+        audioFolderName = PersistenceService.shared.audioStorageDirectory.lastPathComponent
+        audioFolderPath = PersistenceService.shared.audioStorageDirectoryPath
     }
 
     private func saveHotkey() {

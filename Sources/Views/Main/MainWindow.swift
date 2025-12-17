@@ -42,7 +42,6 @@ struct MainWindow: View {
                 SessionDetailView(sessionID: id, viewModel: viewModel)
             }
         }
-        .frame(minWidth: 1100, minHeight: 800)
         .onChange(of: viewModel.pendingOpenSessionID) { _, id in
             guard let id else { return }
             // Jump to the newly created/imported session so the user sees it was added.
