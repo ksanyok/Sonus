@@ -319,7 +319,6 @@ struct RecordView: View {
             return true
         }
         .onAppear {
-            viewModel.prewarmRecording()
             withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                 pulseAnimation = true
             }

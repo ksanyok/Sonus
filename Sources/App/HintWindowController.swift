@@ -7,28 +7,44 @@ final class HintWindowController: NSWindowController {
 
     init(viewModel: AppViewModel, l10n: LocalizationService, statusItem: NSStatusItem?) {
         self.statusItem = statusItem
-        let hosting = NSHostingController(
-            rootView: HintBubbleView(viewModel: viewModel)
-                .environmentObject(l10n)
-                .environment(\.locale, l10n.locale)
-        )
-        let panel = NSPanel(
+        let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: panelSize),
-            styleMask: [.nonactivatingPanel, .fullSizeContentView],
+            styleMask: [.titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.hasShadow = true
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
-        panel.backgroundColor = .clear
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle]
-        panel.contentViewController = hosting
-        super.init(window: panel)
+
+        window.hasShadow = true
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = .clear
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle]
+
+        // Clamp content size to a fixed rectangle to avoid AppKit trying to infer min/max
+        // sizes from SwiftUI hosting view constraints.
+        window.contentMinSize = panelSize
+        window.contentMaxSize = panelSize
+
+        let rootView = HintBubbleView(viewModel: viewModel)
+            .environmentObject(l10n)
+            .environment(\.locale, l10n.locale)
+
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.frame = NSRect(origin: .zero, size: panelSize)
+        hostingView.autoresizingMask = [.width, .height]
+        hostingView.translatesAutoresizingMaskIntoConstraints = true
+
+        let container = NSView(frame: NSRect(origin: .zero, size: panelSize))
+        container.autoresizingMask = [.width, .height]
+        container.translatesAutoresizingMaskIntoConstraints = true
+        container.addSubview(hostingView)
+
+        let vc = NSViewController()
+        vc.view = container
+        window.contentViewController = vc
+        super.init(window: window)
     }
 
     @available(*, unavailable)
@@ -49,12 +65,12 @@ final class HintWindowController: NSWindowController {
     }
 
     func show() {
-        guard let panel = window as? NSPanel else { return }
+        guard let window else { return }
         if let button = statusItem?.button, let screenFrame = button.window?.frame {
             let x = screenFrame.midX - panelSize.width / 2
             let y = screenFrame.minY - panelSize.height - 8
-            panel.setFrame(NSRect(x: x, y: y, width: panelSize.width, height: panelSize.height), display: true)
+            window.setFrame(NSRect(x: x, y: y, width: panelSize.width, height: panelSize.height), display: true)
         }
-        panel.orderFrontRegardless()
+        window.orderFrontRegardless()
     }
 }

@@ -15,6 +15,23 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
     @Published var currentHintIndex: Int = 0
     @Published var engagement: Double = 0.7 // 0..1, влияет на цвет пузыря
 
+    enum APIKeyStatus: Equatable {
+        case unknown
+        case missing
+        case invalid
+        case valid
+    }
+
+    struct RecordingSuggestion: Equatable {
+        let id: UUID
+        let title: String
+        let message: String
+        let createdAt: Date
+    }
+
+    @Published var apiKeyStatus: APIKeyStatus = .unknown
+    @Published var recordingSuggestion: RecordingSuggestion? = nil
+
     @Published var isRecording: Bool = false
     @Published var isStartingRecording: Bool = false
 
@@ -35,7 +52,7 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
             UserDefaults.standard.set(selectedPlaybook.rawValue, forKey: "selectedPlaybook")
         }
     }
-    
+
     @Published var customVocabulary: String = UserDefaults.standard.string(forKey: "customVocabulary") ?? "" {
         didSet {
             UserDefaults.standard.set(customVocabulary, forKey: "customVocabulary")
@@ -54,6 +71,8 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
     private var liveAnalysisTask: Task<Void, Never>?
     private var isLivePipelineActive: Bool = false
     private var pendingLiveChunks: [URL] = []
+
+    private var lastAPIKeyValidationAt: Date?
     
     init() {
         // Bind sessions from persistence
@@ -72,6 +91,11 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
             .assign(to: \.isRecording, on: self)
             .store(in: &cancellables)
 
+        // API key status is needed for global banners and live hints.
+        Task { [weak self] in
+            await self?.refreshAPIKeyStatus(force: false)
+        }
+
         // Подписка на внешние подсказки (для будущих realtime моделей)
         NotificationCenter.default.publisher(for: .newHint)
             .receive(on: RunLoop.main)
@@ -87,6 +111,105 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
 
     var hasAPIKey: Bool {
         KeychainService.shared.load() != nil
+    }
+
+    var shouldShowAPIKeyBanner: Bool {
+        apiKeyStatus == .missing || apiKeyStatus == .invalid
+    }
+
+    var apiKeyBannerText: String? {
+        switch apiKeyStatus {
+        case .missing:
+            return "OpenAI API key is not set. Add it in Settings to enable transcription/analysis."
+        case .invalid:
+            return "OpenAI API key is invalid or rejected. Update it in Settings."
+        default:
+            return nil
+        }
+    }
+
+    @MainActor
+    func refreshAPIKeyStatus(force: Bool) async {
+        let key = KeychainService.shared.load()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let key, !key.isEmpty else {
+            apiKeyStatus = .missing
+            return
+        }
+
+        if !force,
+           let last = lastAPIKeyValidationAt,
+           Date().timeIntervalSince(last) < 10 * 60,
+           apiKeyStatus != .unknown {
+            return
+        }
+
+        apiKeyStatus = .unknown
+        lastAPIKeyValidationAt = Date()
+
+        do {
+            let ok = try await openAI.validateAPIKey()
+            apiKeyStatus = ok ? .valid : .invalid
+        } catch let err as OpenAIError {
+            if case .missingAPIKey = err {
+                apiKeyStatus = .missing
+            } else {
+                // Network or transient errors: keep unknown to avoid false "invalid" banners.
+                apiKeyStatus = .unknown
+            }
+        } catch {
+            apiKeyStatus = .unknown
+        }
+    }
+
+    @MainActor
+    func updateAPIKeyStatusFromOpenAIError(_ error: Error) {
+        if let e = error as? OpenAIError {
+            switch e {
+            case .missingAPIKey:
+                apiKeyStatus = .missing
+                return
+            case .apiError(let message):
+                let lower = message.lowercased()
+                if lower.contains("incorrect api key") ||
+                    lower.contains("invalid api key") ||
+                    lower.contains("invalid_api_key") ||
+                    lower.contains("unauthorized") ||
+                    lower.contains("authentication") {
+                    apiKeyStatus = .invalid
+                }
+                return
+            default:
+                return
+            }
+        }
+    }
+
+    @MainActor
+    func presentRecordingSuggestion(title: String, message: String) {
+        // Don't interrupt if user is already recording.
+        guard !isRecording && !isStartingRecording else { return }
+
+        recordingSuggestion = RecordingSuggestion(
+            id: UUID(),
+            title: title,
+            message: message,
+            createdAt: Date()
+        )
+
+        // Auto-dismiss after a short time to avoid stale prompts.
+        let currentID = recordingSuggestion?.id
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 18 * 1_000_000_000)
+            guard let self else { return }
+            if self.recordingSuggestion?.id == currentID {
+                self.recordingSuggestion = nil
+            }
+        }
+    }
+
+    @MainActor
+    func dismissRecordingSuggestion() {
+        recordingSuggestion = nil
     }
     
     func startRecording() {
@@ -246,16 +369,11 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
 
         for s in candidates {
             let audioURL = persistence.getAudioURL(for: s.audioFilename)
-            do {
-                let duration = await AudioDurationUtils.loadDurationSeconds(url: audioURL)
-                guard duration > 0.01 else { continue }
-                var updated = s
-                updated.duration = duration
-                persistence.saveSession(updated)
-            } catch {
-                // Best-effort only.
-                continue
-            }
+            let duration = await AudioDurationUtils.loadDurationSeconds(url: audioURL)
+            guard duration > 0.01 else { continue }
+            var updated = s
+            updated.duration = duration
+            persistence.saveSession(updated)
         }
     }
 
@@ -410,6 +528,9 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                 }
             } catch {
                 // Quietly ignore live errors; don't break recording.
+                await MainActor.run {
+                    self.updateAPIKeyStatusFromOpenAIError(error)
+                }
             }
         }
     }
@@ -513,6 +634,9 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                 DispatchQueue.main.async { [weak self] in
                     self?.processingStatus[session.id] = nil
                     self?.processingProgress[session.id] = nil
+                    if let self {
+                        self.updateAPIKeyStatusFromOpenAIError(error)
+                    }
                     self?.errorMessage = error.localizedDescription
                     self?.showError = true
                 }

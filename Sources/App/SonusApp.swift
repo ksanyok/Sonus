@@ -7,6 +7,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     weak var l10n: LocalizationService?
     private var statusItem: NSStatusItem?
     private var hintWindowController: HintWindowController?
+    private var suggestionWindowController: RecordingSuggestionWindowController?
+    private let triggerService = ContextTriggerService()
+    private var notificationObservers: [NSObjectProtocol] = []
+    private var didConfigureTriggers = false
+    private var didStartTriggers = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If another instance is already running, quit this one to avoid duplicates.
@@ -23,9 +28,171 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         setupStatusBar()
+
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .sonusOpenSettings,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.openMainWindow()
+                }
+            }
+        )
+
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .sonusShowMiniWindow,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.showMiniWindowIfNeeded()
+                }
+            }
+        )
+
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .sonusTriggersDidChange,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.reloadTriggerSettings()
+                }
+            }
+        )
+
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .sonusCloseHintsPanel,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.hintWindowController?.close()
+                }
+            }
+        )
+
+        configureTriggersIfPossible()
+
         GlobalHotKeyService.shared.register()
         GlobalHotKeyService.shared.onHotKeyTriggered = { [weak self] in
             self?.toggleMiniWindow()
+        }
+    }
+
+    func configureTriggersIfPossible() {
+        guard !didConfigureTriggers else { return }
+        guard viewModel != nil, l10n != nil else { return }
+        didConfigureTriggers = true
+
+        triggerService.onSuggestRecording = { [weak self] reason in
+            guard let self else { return }
+            Task { @MainActor in
+                guard let vm = self.viewModel, let l10n = self.l10n else { return }
+                guard !vm.isRecording && !vm.isStartingRecording else { return }
+
+                let title: String
+                let message: String
+                switch reason {
+                case .microphoneActive:
+                    title = (l10n.language == .ru) ? "Микрофон активен" : "Microphone is active"
+                    message = (l10n.language == .ru)
+                        ? "Похоже, какое‑то приложение использует микрофон. Начать запись в Sonus?"
+                        : "Another app seems to be using the microphone. Start recording in Sonus?"
+                case .appBecameActive(let appName):
+                    title = (l10n.language == .ru) ? "Похоже на звонок" : "Possible call"
+                    message = (l10n.language == .ru)
+                        ? "Вы открыли \(appName). Начать запись разговора?"
+                        : "You opened \(appName). Start recording?"
+                }
+
+                vm.presentRecordingSuggestion(title: title, message: message)
+
+                self.suggestionWindowController?.hide()
+                self.suggestionWindowController = RecordingSuggestionWindowController(
+                    statusItem: self.statusItem,
+                    titleStart: l10n.t("Start recording", ru: "Начать запись"),
+                    titleLater: l10n.t("Later", ru: "Позже"),
+                    onStart: {
+                        vm.dismissRecordingSuggestion()
+                        vm.startRecording()
+                        NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
+                        self.suggestionWindowController?.hide()
+                        self.suggestionWindowController = nil
+                    },
+                    onLater: {
+                        vm.dismissRecordingSuggestion()
+                        self.suggestionWindowController?.hide()
+                        self.suggestionWindowController = nil
+                    }
+                )
+
+                self.suggestionWindowController?.show(title: title, message: message)
+
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 12 * 1_000_000_000)
+                    self.suggestionWindowController?.hide()
+                    self.suggestionWindowController = nil
+                }
+            }
+        }
+
+        startTriggersIfPossible()
+    }
+
+    func startTriggersIfPossible() {
+        guard didConfigureTriggers else { return }
+        guard !didStartTriggers else { return }
+        didStartTriggers = true
+        reloadTriggerSettings()
+        triggerService.start()
+    }
+
+    func showDebugRecordingSuggestion() {
+        guard let vm = viewModel, let l10n else { return }
+        guard !vm.isRecording && !vm.isStartingRecording else { return }
+
+        let title = l10n.t("Debug prompt", ru: "Тестовое уведомление")
+        let message = l10n.t(
+            "This is an opt-in debug prompt to verify the suggestion window.",
+            ru: "Это тестовое уведомление для проверки окна рекомендации."
+        )
+
+        suggestionWindowController?.hide()
+        suggestionWindowController = RecordingSuggestionWindowController(
+            statusItem: statusItem,
+            titleStart: l10n.t("Start recording", ru: "Начать запись"),
+            titleLater: l10n.t("Later", ru: "Позже"),
+            onStart: {
+                vm.dismissRecordingSuggestion()
+                vm.startRecording()
+                NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
+                self.suggestionWindowController?.hide()
+                self.suggestionWindowController = nil
+            },
+            onLater: {
+                vm.dismissRecordingSuggestion()
+                self.suggestionWindowController?.hide()
+                self.suggestionWindowController = nil
+            }
+        )
+        suggestionWindowController?.show(title: title, message: message)
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4 * 1_000_000_000)
+            self.suggestionWindowController?.hide()
+            self.suggestionWindowController = nil
+        }
+    }
+
+    deinit {
+        for obs in notificationObservers {
+            NotificationCenter.default.removeObserver(obs)
         }
     }
 
@@ -73,6 +240,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    private func showMiniWindowIfNeeded() {
+        let miniWindow = NSApplication.shared.windows.first { $0.title == "Mini Recorder" }
+        if let window = miniWindow, window.isVisible { return }
+        if let url = URL(string: "sonus://toggle-mini") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func reloadTriggerSettings() {
+        let enabled: Bool
+        if UserDefaults.standard.object(forKey: "triggers.enabled") == nil {
+            enabled = true
+        } else {
+            enabled = UserDefaults.standard.bool(forKey: "triggers.enabled")
+        }
+
+        let mic: Bool
+        if UserDefaults.standard.object(forKey: "triggers.mic") == nil {
+            mic = true
+        } else {
+            mic = UserDefaults.standard.bool(forKey: "triggers.mic")
+        }
+
+        let apps: Bool
+        if UserDefaults.standard.object(forKey: "triggers.apps") == nil {
+            apps = true
+        } else {
+            apps = UserDefaults.standard.bool(forKey: "triggers.apps")
+        }
+
+        triggerService.settings = .init(
+            enableSuggestions: enabled,
+            suggestOnMicActive: mic,
+            suggestOnAppActive: apps,
+            cooldownSeconds: 30
+        )
+        triggerService.persistSettings()
+    }
+
+    func toggleHintsPanel() {
+        toggleHints()
     }
 
     @objc private func toggleHints() {
@@ -136,6 +346,21 @@ struct SonusApp: App {
                 .onAppear {
                     appDelegate.viewModel = viewModel
                     appDelegate.l10n = l10n
+                    appDelegate.configureTriggersIfPossible()
+
+                    // Opt-in debug hook to validate the suggestion panel without relying on external triggers.
+                    if ProcessInfo.processInfo.environment["SONUS_DEBUG_SHOW_SUGGESTION"] == "1" {
+                        Task { @MainActor in
+                            appDelegate.showDebugRecordingSuggestion()
+                        }
+                    }
+
+                    // Opt-in debug hook to validate the hints panel open path.
+                    if ProcessInfo.processInfo.environment["SONUS_DEBUG_SHOW_HINTS"] == "1" {
+                        Task { @MainActor in
+                            appDelegate.toggleHintsPanel()
+                        }
+                    }
                 }
         }
         .commands {

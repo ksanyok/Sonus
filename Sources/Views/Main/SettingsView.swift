@@ -19,6 +19,16 @@ struct SettingsView: View {
     @State private var useControl = false
     @State private var audioFolderName: String = PersistenceService.shared.audioStorageDirectory.lastPathComponent
     @State private var audioFolderPath: String = PersistenceService.shared.audioStorageDirectoryPath
+
+    @State private var suggestionsEnabled: Bool = UserDefaults.standard.object(forKey: "triggers.enabled") == nil
+        ? true
+        : UserDefaults.standard.bool(forKey: "triggers.enabled")
+    @State private var suggestOnMicActive: Bool = UserDefaults.standard.object(forKey: "triggers.mic") == nil
+        ? true
+        : UserDefaults.standard.bool(forKey: "triggers.mic")
+    @State private var suggestOnAppsActive: Bool = UserDefaults.standard.object(forKey: "triggers.apps") == nil
+        ? true
+        : UserDefaults.standard.bool(forKey: "triggers.apps")
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -128,6 +138,26 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(l10n.t("Suggestions", ru: "Подсказки"))
+                        .font(.headline)
+
+                    Toggle(l10n.t("Suggest starting a recording", ru: "Подсказывать начать запись"), isOn: $suggestionsEnabled)
+
+                    Toggle(l10n.t("When microphone becomes active", ru: "Когда активируется микрофон"), isOn: $suggestOnMicActive)
+                        .disabled(!suggestionsEnabled)
+
+                    Toggle(l10n.t("When Telegram/Viber becomes active", ru: "Когда активируется Telegram/Viber"), isOn: $suggestOnAppsActive)
+                        .disabled(!suggestionsEnabled)
+
+                    Text(l10n.t("Shows a small prompt near the menu bar.", ru: "Показывает небольшую подсказку возле меню-бара."))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 .padding()
                 .background(Color(nsColor: .controlBackgroundColor))
@@ -275,6 +305,16 @@ struct SettingsView: View {
             loadSettings()
             checkMicPermission()
             refreshAudioFolderUI()
+            persistTriggerSettings()
+        }
+        .onChange(of: suggestionsEnabled) { _, _ in
+            persistTriggerSettings()
+        }
+        .onChange(of: suggestOnMicActive) { _, _ in
+            persistTriggerSettings()
+        }
+        .onChange(of: suggestOnAppsActive) { _, _ in
+            persistTriggerSettings()
         }
     }
     
@@ -285,6 +325,11 @@ struct SettingsView: View {
             KeychainService.shared.save(key: apiKey)
         }
         saveHotkey()
+
+        Task { @MainActor in
+            await viewModel.refreshAPIKeyStatus(force: true)
+        }
+
         withAnimation {
             showSaveSuccess = true
         }
@@ -316,15 +361,30 @@ struct SettingsView: View {
                         ? l10n.t("Key works.", ru: "Ключ работает.")
                         : l10n.t("Key rejected by OpenAI (401/403).", ru: "OpenAI отклонил ключ (401/403).")
                     isValidatingKey = false
+
+                    viewModel.apiKeyStatus = ok ? .valid : .invalid
                 }
             } catch {
                 await MainActor.run {
                     keyValidationResult = false
                     keyValidationMessage = error.localizedDescription
                     isValidatingKey = false
+
+                    if apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        viewModel.apiKeyStatus = .missing
+                    } else {
+                        viewModel.updateAPIKeyStatusFromOpenAIError(error)
+                    }
                 }
             }
         }
+    }
+
+    private func persistTriggerSettings() {
+        UserDefaults.standard.set(suggestionsEnabled, forKey: "triggers.enabled")
+        UserDefaults.standard.set(suggestOnMicActive, forKey: "triggers.mic")
+        UserDefaults.standard.set(suggestOnAppsActive, forKey: "triggers.apps")
+        NotificationCenter.default.post(name: .sonusTriggersDidChange, object: nil)
     }
     
     private func checkMicPermission() {
