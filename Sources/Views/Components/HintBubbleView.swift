@@ -60,7 +60,7 @@ struct HintBubbleView: View {
                     .buttonStyle(.plain)
                 }
 
-                if let hint = viewModel.currentHint {
+                if viewModel.isRecording, let hint = viewModel.currentHint {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(l10n.t("Question", ru: "Вопрос"))
@@ -116,7 +116,9 @@ struct HintBubbleView: View {
                             .tint(Color.white.opacity(0.28))
                             .foregroundColor(.white)
                             .padding(.top, 4)
-                        } else if viewModel.isRecording {
+                        }
+
+                        if viewModel.isRecording {
                             Text(l10n.t("Recording: first hint usually appears in 10–20 seconds.", ru: "Идёт запись: ждём первую подсказку (обычно 10–20 секунд)."))
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
@@ -124,13 +126,22 @@ struct HintBubbleView: View {
                             Text(l10n.t("Start recording to get real-time hints.", ru: "Запустите запись — подсказки будут появляться в реальном времени."))
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
+
+                            Button(l10n.t("Start recording", ru: "Начать запись")) {
+                                viewModel.startRecording()
+                                NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color.white.opacity(0.22))
+                            .foregroundColor(.white)
+                            .padding(.top, 6)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
                 }
 
-                if viewModel.currentHint != nil {
+                if viewModel.isRecording, viewModel.currentHint != nil {
                     HStack(spacing: 12) {
                         Button(action: viewModel.previousHint) {
                             Image(systemName: "chevron.left")
@@ -147,16 +158,6 @@ struct HintBubbleView: View {
                         .tint(Color.white.opacity(0.28))
                         .foregroundColor(.white)
                         .disabled(viewModel.hints.isEmpty)
-
-                        Spacer()
-
-                        Button(action: copyHint) {
-                            Label(l10n.t("Copy", ru: "Копировать"), systemImage: "doc.on.doc")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color.white.opacity(0.22))
-                        .foregroundColor(.white)
-                        .disabled(viewModel.currentHint == nil)
                     }
                     .padding(.top, 4)
                 }
@@ -166,12 +167,6 @@ struct HintBubbleView: View {
             .padding(18)
         }
         .frame(width: 360, height: 280)
-    }
-
-    private func copyHint() {
-        guard let hint = viewModel.currentHint else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(hint.answer, forType: .string)
     }
 
 }

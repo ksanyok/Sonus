@@ -12,6 +12,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var notificationObservers: [NSObjectProtocol] = []
     private var didConfigureTriggers = false
     private var didStartTriggers = false
+    private var statusItemBaseImage: NSImage?
+    private var statusItemBlinkTimer: Timer?
+    private var statusItemBlinkOn = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If another instance is already running, quit this one to avoid duplicates.
@@ -113,6 +116,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 vm.presentRecordingSuggestion(title: title, message: message)
 
+                self.startStatusItemBlinking()
+
                 self.suggestionWindowController?.hide()
                 self.suggestionWindowController = RecordingSuggestionWindowController(
                     statusItem: self.statusItem,
@@ -122,11 +127,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         vm.dismissRecordingSuggestion()
                         vm.startRecording()
                         NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
+                        self.stopStatusItemBlinking()
                         self.suggestionWindowController?.hide()
                         self.suggestionWindowController = nil
                     },
                     onLater: {
                         vm.dismissRecordingSuggestion()
+                        self.stopStatusItemBlinking()
                         self.suggestionWindowController?.hide()
                         self.suggestionWindowController = nil
                     }
@@ -136,6 +143,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 12 * 1_000_000_000)
+                    self.stopStatusItemBlinking()
                     self.suggestionWindowController?.hide()
                     self.suggestionWindowController = nil
                 }
@@ -164,6 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         suggestionWindowController?.hide()
+        stopStatusItemBlinking()
         suggestionWindowController = RecordingSuggestionWindowController(
             statusItem: statusItem,
             titleStart: l10n.t("Start recording", ru: "Начать запись"),
@@ -172,19 +181,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 vm.dismissRecordingSuggestion()
                 vm.startRecording()
                 NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
+                self.stopStatusItemBlinking()
                 self.suggestionWindowController?.hide()
                 self.suggestionWindowController = nil
             },
             onLater: {
                 vm.dismissRecordingSuggestion()
+                self.stopStatusItemBlinking()
                 self.suggestionWindowController?.hide()
                 self.suggestionWindowController = nil
             }
         )
+        startStatusItemBlinking()
         suggestionWindowController?.show(title: title, message: message)
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 4 * 1_000_000_000)
+            self.stopStatusItemBlinking()
             self.suggestionWindowController?.hide()
             self.suggestionWindowController = nil
         }
@@ -218,15 +231,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
             button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
+            statusItemBaseImage = button.image
         }
         let menu = NSMenu()
         menu.addItem(withTitle: t("Open Sonus", "Открыть Sonus"), action: #selector(openMainWindow), keyEquivalent: "")
         menu.addItem(withTitle: t("Toggle Recording", "Переключить запись"), action: #selector(toggleRecording), keyEquivalent: "")
         menu.addItem(withTitle: t("Show Hints", "Показать подсказки"), action: #selector(toggleHints), keyEquivalent: "")
-        menu.addItem(withTitle: t("Simulate Live Hint", "Симулировать подсказку"), action: #selector(simulateHint), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: t("Quit", "Выйти"), action: #selector(quit), keyEquivalent: "q")
         statusItem?.menu = menu
+    }
+
+    private func startStatusItemBlinking() {
+        guard let button = statusItem?.button else { return }
+        if statusItemBaseImage == nil {
+            statusItemBaseImage = button.image
+        }
+
+        stopStatusItemBlinking()
+        statusItemBlinkOn = false
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                guard let button = self.statusItem?.button else { return }
+                self.statusItemBlinkOn.toggle()
+                if self.statusItemBlinkOn {
+                    button.image = NSImage(systemSymbolName: "waveform.circle.fill", accessibilityDescription: "Sonus")
+                } else {
+                    button.image = self.statusItemBaseImage ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
+                }
+            }
+        }
+
+        statusItemBlinkTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopStatusItemBlinking() {
+        statusItemBlinkTimer?.invalidate()
+        statusItemBlinkTimer = nil
+        statusItemBlinkOn = false
+        if let button = statusItem?.button {
+            button.image = statusItemBaseImage ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
+        }
     }
 
     private func t(_ en: String, _ ru: String) -> String {
