@@ -85,7 +85,7 @@ struct RecordView: View {
                 .padding(.horizontal, 4)
 
                 Text(l10n.t("Hotkey: Cmd+Shift+Space (configurable in Settings)", ru: "Хоткей: Cmd+Shift+Space (настраивается в Settings)"))
-                    .font(.caption)
+                    .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -120,7 +120,7 @@ struct RecordView: View {
                         HStack(spacing: 14) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(l10n.t("Title", ru: "Название"))
-                                    .font(.caption)
+                                    .font(.system(size: 13))
                                     .foregroundColor(.white.opacity(0.6))
                                 TextField(l10n.t("e.g. Client meeting", ru: "Например, Встреча с клиентом"), text: $viewModel.draftTitle)
                                     .textFieldStyle(.roundedBorder)
@@ -131,7 +131,7 @@ struct RecordView: View {
                             }
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(l10n.t("Category", ru: "Категория"))
-                                    .font(.caption)
+                                    .font(.system(size: 13))
                                     .foregroundColor(.white.opacity(0.6))
                                 Picker(l10n.t("Category", ru: "Категория"), selection: $viewModel.draftCategory) {
                                     ForEach(SessionCategory.allCases) { category in
@@ -219,11 +219,11 @@ struct RecordView: View {
                                     
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text(l10n.t("Tips", ru: "Советы"))
-                                            .font(.caption)
+                                            .font(.system(size: 14, weight: .medium))
                                             .foregroundColor(.white.opacity(0.7))
                                         Text(l10n.t("Use the hotkey or the button to start. Title and category will be saved into the new session.", ru: "Используй хоткей или кнопку, чтобы начать. Категория и название сохранятся в новую запись."))
                                             .foregroundColor(.white.opacity(0.7))
-                                            .font(.footnote)
+                                            .font(.system(size: 15))
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
                                     
@@ -238,6 +238,7 @@ struct RecordView: View {
                                         }
                                         .buttonStyle(.borderedProminent)
                                         .tint(.blue)
+                                        .font(.system(size: 16, weight: .semibold))
                                         
                                         Button {
                                             viewModel.stopRecording()
@@ -247,6 +248,7 @@ struct RecordView: View {
                                         }
                                         .buttonStyle(.bordered)
                                         .tint(.red)
+                                        .font(.system(size: 16, weight: .semibold))
                                     }
                                     
                                     Button {
@@ -258,6 +260,7 @@ struct RecordView: View {
                                     .buttonStyle(.bordered)
                                     .controlSize(.small)
                                     .tint(.secondary)
+                                    .font(.system(size: 15, weight: .semibold))
                                     .help(l10n.t("Import audio file or drag & drop here", ru: "Загрузить файл или перетащите сюда"))
                                 }
                                 .padding(22)

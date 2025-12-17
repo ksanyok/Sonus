@@ -5,10 +5,17 @@ struct MainWindow: View {
     @EnvironmentObject private var l10n: LocalizationService
     @State private var selectedSidebarItem: SidebarItem? = .record
     @State private var navigationPath: [UUID] = []
+    @State private var navigationResetToken = UUID()
     
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $selectedSidebarItem)
+            SidebarView(selection: $selectedSidebarItem, onInvoke: { item in
+                // Always exit detail views when invoking any sidebar item.
+                navigationPath.removeAll()
+                viewModel.selectedSession = nil
+                selectedSidebarItem = item
+                navigationResetToken = UUID()
+            })
                 .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
         } detail: {
             NavigationStack(path: $navigationPath) {
@@ -29,6 +36,8 @@ struct MainWindow: View {
                     Text(l10n.t("Select an item", ru: "Выберите раздел"))
                 }
             }
+            // Also reset any internal navigation state from destination-based NavigationLinks.
+            .id(navigationResetToken)
             .navigationDestination(for: UUID.self) { id in
                 SessionDetailView(sessionID: id, viewModel: viewModel)
             }

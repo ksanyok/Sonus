@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selection: SidebarItem?
+    var onInvoke: ((SidebarItem) -> Void)? = nil
     @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
@@ -11,35 +12,50 @@ struct SidebarView: View {
                 icon: "mic.fill",
                 color: .red,
                 isSelected: selection == .record
-            ) { selection = .record }
+            ) {
+                selection = .record
+                onInvoke?(.record)
+            }
             
             SidebarButton(
                 title: l10n.t("History", ru: "История"),
                 icon: "clock.fill",
                 color: .blue,
                 isSelected: selection == .history
-            ) { selection = .history }
+            ) {
+                selection = .history
+                onInvoke?(.history)
+            }
             
             SidebarButton(
                 title: l10n.t("Analytics", ru: "Аналитика"),
                 icon: "chart.bar.fill",
                 color: .purple,
                 isSelected: selection == .analytics
-            ) { selection = .analytics }
+            ) {
+                selection = .analytics
+                onInvoke?(.analytics)
+            }
 
             SidebarButton(
                 title: l10n.t("Search", ru: "Поиск"),
                 icon: "magnifyingglass",
                 color: .orange,
                 isSelected: selection == .search
-            ) { selection = .search }
+            ) {
+                selection = .search
+                onInvoke?(.search)
+            }
             
             SidebarButton(
                 title: l10n.t("Settings", ru: "Настройки"),
                 icon: "gear",
                 color: .gray,
                 isSelected: selection == .settings
-            ) { selection = .settings }
+            ) {
+                selection = .settings
+                onInvoke?(.settings)
+            }
             
             Spacer()
         }
@@ -66,12 +82,12 @@ struct SidebarButton: View {
                         .frame(width: 44, height: 44)
                     
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 21, weight: .semibold))
                         .foregroundColor(isSelected ? .white : color)
                 }
                 
                 Text(title)
-                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundColor(isSelected ? .white : .primary)
                 
                 Spacer()

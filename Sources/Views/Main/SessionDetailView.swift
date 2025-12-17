@@ -14,6 +14,7 @@ struct SessionDetailView: View {
 
     @State private var selectedTab: DetailTab = .overview
     @State private var isExporting = false
+    @State private var editingSession: Session?
 
     enum DetailTab: String, CaseIterable {
         case overview = "Overview"
@@ -29,7 +30,12 @@ struct SessionDetailView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Header
-                        SessionHeaderView(session: session, viewModel: viewModel, isExporting: $isExporting)
+                        SessionHeaderView(
+                            session: session,
+                            viewModel: viewModel,
+                            isExporting: $isExporting,
+                            onEdit: { editingSession = session }
+                        )
                             .padding(.horizontal)
                             .padding(.top, 16)
 
@@ -54,7 +60,13 @@ struct SessionDetailView: View {
                                 case .overview:
                                     OverviewGrid(analysis: analysis)
                                 case .analysis:
-                                    DetailedAnalysisView(analysis: analysis)
+                                    DetailedAnalysisView(
+                                        analysis: analysis,
+                                        transcript: session.transcript,
+                                        onSeek: { t in
+                                            audioPlayer.seek(to: t)
+                                        }
+                                    )
                                 case .speakers:
                                     SpeakerInsightsView(insights: analysis.speakerInsights)
                                 case .transcript:
@@ -109,6 +121,9 @@ struct SessionDetailView: View {
                 .background(Color(nsColor: .windowBackgroundColor))
             }
         }
+        .sheet(item: $editingSession, onDismiss: { editingSession = nil }) { session in
+            SessionEditSheet(session: session, viewModel: viewModel)
+        }
     }
     
     private func tabRu(_ tab: DetailTab) -> String {
@@ -126,6 +141,7 @@ struct SessionHeaderView: View {
     let session: Session
     @ObservedObject var viewModel: AppViewModel
     @Binding var isExporting: Bool
+    let onEdit: () -> Void
     @EnvironmentObject private var l10n: LocalizationService
 
     private func needsAnalysisUpdate(_ session: Session) -> Bool {
@@ -147,18 +163,13 @@ struct SessionHeaderView: View {
                     SonusLogo(size: 28)
                         .opacity(0.8)
                     
-                    if let customTitle = session.customTitle, !customTitle.isEmpty {
-                        Text(customTitle)
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                    } else {
-                        Text(session.date, format: .dateTime.year().month().day().hour().minute())
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                    }
+                    Text(session.title)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                 }
 
                 HStack(spacing: 16) {
                     Label(l10n.t(session.category.displayNameEn, ru: session.category.displayNameRu), systemImage: session.category.icon)
-                        .font(.subheadline)
+                        .font(.system(size: 15, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(Color.secondary.opacity(0.1))
@@ -168,7 +179,7 @@ struct SessionHeaderView: View {
                         Image(systemName: "clock")
                         Text(formatDuration(session.duration))
                     }
-                    .font(.subheadline)
+                    .font(.system(size: 15))
                     .foregroundColor(.secondary)
 
                     if let analysis = session.analysis {
@@ -176,7 +187,7 @@ struct SessionHeaderView: View {
                             Image(systemName: "person.2")
                             Text("\(analysis.speakerCount ?? analysis.participants.count)")
                         }
-                        .font(.subheadline)
+                        .font(.system(size: 15))
                         .foregroundColor(.secondary)
 
                         if !analysis.languages.isEmpty {
@@ -184,7 +195,7 @@ struct SessionHeaderView: View {
                                 Image(systemName: "globe")
                                 Text(analysis.languages.joined(separator: ", "))
                             }
-                            .font(.subheadline)
+                            .font(.system(size: 15))
                             .foregroundColor(.secondary)
                         }
                     }
@@ -217,6 +228,15 @@ struct SessionHeaderView: View {
                         needsUpdate: needsAnalysisUpdate(session),
                         onAnalyze: { viewModel.processSession(session) }
                     )
+
+                    Button {
+                        onEdit()
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.bordered)
+                    .help(l10n.t("Edit", ru: "Правка"))
+
                     Button(role: .destructive) {
                         viewModel.deleteSession(session)
                     } label: {
@@ -386,6 +406,25 @@ struct OverviewGrid: View {
             .padding()
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(16)
+
+            // In 100 words (quick skim)
+            if !analysis.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(l10n.t("In 100 words", ru: "В 100 словах"), systemImage: "text.justify")
+                        .font(.headline)
+                    Text(limitWords(digest100Words(analysis), to: 100))
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+            }
             
             // Quick Metrics Grid
             LazyVGrid(columns: metricColumns, spacing: 16) {
@@ -514,6 +553,16 @@ struct OverviewGrid: View {
             }
         }
     }
+
+    private func limitWords(_ text: String, to maxWords: Int) -> String {
+        let cleaned = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = cleaned.split(whereSeparator: { $0.isWhitespace })
+        guard words.count > maxWords else { return cleaned }
+        return words.prefix(maxWords).joined(separator: " ") + "…"
+    }
     
     private func sentimentIcon(_ s: String) -> String {
         let lower = s.lowercased()
@@ -527,6 +576,26 @@ struct OverviewGrid: View {
         if lower.contains("positive") || lower.contains("позитив") { return .green }
         if lower.contains("negative") || lower.contains("негатив") { return .red }
         return .gray
+    }
+
+    private func digest100Words(_ analysis: Analysis) -> String {
+        // Make this intentionally different from the full summary by mixing multiple fields.
+        var parts: [String] = []
+        let summary = analysis.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !summary.isEmpty { parts.append(summary) }
+
+        let intent = analysis.customerIntent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !intent.isEmpty {
+            parts.append(l10n.t("Intent: ", ru: "Намерение: ") + intent)
+        }
+
+        if let first = analysis.nextSteps.first, !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(l10n.t("Next: ", ru: "Дальше: ") + first)
+        }
+        if let first = analysis.recommendations.first, !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(l10n.t("Advice: ", ru: "Совет: ") + first)
+        }
+        return parts.joined(separator: " ")
     }
 }
 
@@ -552,11 +621,60 @@ struct StyleBadgeMini: View {
 
 struct DetailedAnalysisView: View {
     let analysis: Analysis
+    let transcript: String?
+    let onSeek: ((TimeInterval) -> Void)?
     @EnvironmentObject private var l10n: LocalizationService
     @State private var isCriteriaExpanded = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
+
+            // 100 words summary
+            if !analysis.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(l10n.t("In 100 words", ru: "В 100 словах"), systemImage: "text.justify")
+                        .font(.title3.bold())
+                    Text(limitWords(digest100Words(analysis), to: 100))
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+            }
+
+            // Stop words / Top words
+            let stop = (analysis.stopWords ?? []).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            let top = computeTopWords(transcript: transcript, limit: 14)
+            if !stop.isEmpty || !top.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(l10n.t("Top words", ru: "Топ слова"), systemImage: "text.word.spacing")
+                        .font(.title3.bold())
+
+                    if !stop.isEmpty {
+                        Text(l10n.t("Stop words", ru: "Стоп-слова"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        WrapChips(items: stop)
+                    } else {
+                        WrapChips(items: top)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+            }
             
             // Manager Guidance
             if let guidance = analysis.managerGuidance {
@@ -566,7 +684,7 @@ struct DetailedAnalysisView: View {
             
             // Triggers
             if let triggers = analysis.triggers, !triggers.isEmpty {
-                TriggersSection(triggers: triggers)
+                TriggersSection(triggers: triggers, onSeek: onSeek)
                 Divider()
             }
 
@@ -601,8 +719,8 @@ struct DetailedAnalysisView: View {
                 let remainingCriteria = Array(analysis.criteria.dropFirst(3))
                 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16)], spacing: 16) {
-                    ForEach(topCriteria) { criterion in
-                        CriterionCard(criterion: criterion)
+                    ForEach(Array(topCriteria.enumerated()), id: \.element.id) { _, criterion in
+                        CriterionCard(criterion: criterion, isFeatured: true)
                     }
                 }
                 
@@ -612,7 +730,7 @@ struct DetailedAnalysisView: View {
                         content: {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16)], spacing: 16) {
                                 ForEach(remainingCriteria) { criterion in
-                                    CriterionCard(criterion: criterion)
+                                    CriterionCard(criterion: criterion, isFeatured: false)
                                 }
                             }
                             .padding(.top, 16)
@@ -685,12 +803,20 @@ struct DetailedAnalysisView: View {
                     ForEach(Array(analysis.keyMoments.enumerated()), id: \.offset) { _, m in
                         HStack(alignment: .top, spacing: 16) {
                             if let th = m.timeHint, !th.isEmpty {
-                                Text(th)
-                                    .font(.caption.monospacedDigit())
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.secondary.opacity(0.1))
-                                    .cornerRadius(6)
+                                Button {
+                                    if let seconds = TimelinePointBuilder.parseTimeHintSeconds(th) {
+                                        onSeek?(seconds)
+                                    }
+                                } label: {
+                                    Text(th)
+                                        .font(.caption.monospacedDigit())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.secondary.opacity(0.1))
+                                        .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                                .help(l10n.t("Go to this moment", ru: "Перейти к этому моменту"))
                             }
                             
                             VStack(alignment: .leading, spacing: 6) {
@@ -720,15 +846,78 @@ struct DetailedAnalysisView: View {
         }
     }
     
+    private func limitWords(_ text: String, to maxWords: Int) -> String {
+        let cleaned = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = cleaned.split(whereSeparator: { $0.isWhitespace })
+        guard words.count > maxWords else { return cleaned }
+        return words.prefix(maxWords).joined(separator: " ") + "…"
+    }
+
     private func scoreColor(_ score: Int) -> Color {
         if score >= 8 { return .green }
         if score >= 5 { return .orange }
         return .red
     }
+
+    private func digest100Words(_ analysis: Analysis) -> String {
+        var parts: [String] = []
+        let summary = analysis.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !summary.isEmpty { parts.append(summary) }
+
+        let intent = analysis.customerIntent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !intent.isEmpty {
+            parts.append(l10n.t("Intent: ", ru: "Намерение: ") + intent)
+        }
+        if let first = analysis.nextSteps.first, !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(l10n.t("Next: ", ru: "Дальше: ") + first)
+        }
+        if let first = analysis.recommendations.first, !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(l10n.t("Advice: ", ru: "Совет: ") + first)
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func computeTopWords(transcript: String?, limit: Int) -> [String] {
+        guard let transcript, !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+
+        let stopEn: Set<String> = [
+            "the","and","a","an","to","of","in","on","for","with","is","are","was","were","be","been","it","this","that","we","you","i","they","he","she","as","at","by","from","or","not","but","so","if","then","there","here","can","could","should","would","will","just","about"
+        ]
+        let stopRu: Set<String> = [
+            "и","а","но","или","да","нет","что","это","как","так","то","же","ли","в","на","по","к","ко","из","за","у","о","об","от","до","для","при","про","мы","вы","я","они","он","она","оно","это","эти","тот","та","те","тут","там","уже","ещё","еще","бы","не","ну","вот","если","тогда","когда","где","что","чтобы","потому","почему"
+        ]
+
+        let lowered = transcript.lowercased()
+        let cleaned = lowered.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.letters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar) || scalar == " " {
+                return Character(scalar)
+            }
+            return " "
+        }
+        let tokens = String(cleaned)
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+
+        var freq: [String: Int] = [:]
+        for w in tokens {
+            if w.count <= 2 { continue }
+            if stopEn.contains(w) || stopRu.contains(w) { continue }
+            freq[w, default: 0] += 1
+        }
+
+        return freq
+            .sorted { a, b in a.value == b.value ? a.key < b.key : a.value > b.value }
+            .prefix(limit)
+            .map { "\($0.key) (\($0.value))" }
+    }
 }
 
 private struct CriterionCard: View {
     let criterion: EvaluationCriterion
+    let isFeatured: Bool
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -754,6 +943,10 @@ private struct CriterionCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isFeatured ? scoreColor(criterion.score).opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
     
     private func scoreColor(_ score: Int) -> Color {
@@ -1188,6 +1381,7 @@ struct ManagerGuidanceSection: View {
 
 struct TriggersSection: View {
     let triggers: [ConversationTrigger]
+    let onSeek: ((TimeInterval) -> Void)?
     @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
@@ -1197,7 +1391,7 @@ struct TriggersSection: View {
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 16)], spacing: 16) {
                 ForEach(triggers, id: \.self) { trigger in
-                    TriggerCard(trigger: trigger)
+                    TriggerCard(trigger: trigger, onSeek: onSeek)
                 }
             }
         }
@@ -1206,6 +1400,8 @@ struct TriggersSection: View {
 
 struct TriggerCard: View {
     let trigger: ConversationTrigger
+    let onSeek: ((TimeInterval) -> Void)?
+    @EnvironmentObject private var l10n: LocalizationService
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -1230,11 +1426,19 @@ struct TriggerCard: View {
                         .lineLimit(2)
                 }
                 if let time = trigger.timeHint {
-                    Text(time)
-                        .font(.caption2)
-                        .monospacedDigit()
-                        .foregroundColor(.secondary)
-                        .padding(.top, 2)
+                    Button {
+                        if let seconds = TimelinePointBuilder.parseTimeHintSeconds(time) {
+                            onSeek?(seconds)
+                        }
+                    } label: {
+                        Text(time)
+                            .font(.caption2)
+                            .monospacedDigit()
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
+                    }
+                    .buttonStyle(.plain)
+                    .help(l10n.t("Go to this moment", ru: "Перейти к этому моменту"))
                 }
             }
         }

@@ -5,7 +5,6 @@ struct HistoryView: View {
     @EnvironmentObject private var l10n: LocalizationService
     var onSelect: ((Session) -> Void)? = nil
     @State private var selectedCategory: SessionCategory? = nil // nil means "All"
-    @State private var showEditSheet: Bool = false
     @State private var editingSession: Session?
     
     var filteredSessions: [Session] {
@@ -44,25 +43,19 @@ struct HistoryView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     ForEach(filteredSessions) { session in
-                        NavigationLink(value: session.id) {
-                            SessionCard(session: session,
-                                        processingStatus: viewModel.processingStatus[session.id],
-                                        processingProgress: viewModel.processingProgress[session.id],
-                                        onAnalyze: {
-                                viewModel.processSession(session)
-                            }, onDelete: {
-                                viewModel.deleteSession(session)
-                            }, onEdit: {
-                                editingSession = session
-                                showEditSheet = true
-                            })
-                            .contentShape(Rectangle())
-                        }
-                        .simultaneousGesture(TapGesture().onEnded {
+                        SessionCard(
+                            session: session,
+                            processingStatus: viewModel.processingStatus[session.id],
+                            processingProgress: viewModel.processingProgress[session.id],
+                            onAnalyze: { viewModel.processSession(session) },
+                            onDelete: { viewModel.deleteSession(session) },
+                            onEdit: { editingSession = session }
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
                             viewModel.selectedSession = session
                             onSelect?(session)
-                        })
-                        .buttonStyle(.plain)
+                        }
                     }
                 }
                 .padding()
@@ -70,10 +63,8 @@ struct HistoryView: View {
         }
         .navigationTitle(l10n.t("History", ru: "История"))
         .background(Color(nsColor: .windowBackgroundColor))
-        .sheet(isPresented: $showEditSheet, onDismiss: { editingSession = nil }) {
-            if let session = editingSession {
-                SessionEditSheet(session: session, viewModel: viewModel, isPresented: $showEditSheet)
-            }
+        .sheet(item: $editingSession, onDismiss: { editingSession = nil }) { session in
+            SessionEditSheet(session: session, viewModel: viewModel)
         }
     }
 }
@@ -90,6 +81,7 @@ struct CategoryPill: View {
                 Image(systemName: icon)
                 Text(title)
             }
+            .font(.system(size: 15, weight: .medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(isSelected ? Color.accentColor : Color(nsColor: .controlColor))
@@ -133,20 +125,14 @@ struct SessionCard: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                if let customTitle = session.customTitle, !customTitle.isEmpty {
-                    Text(customTitle)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                } else {
-                    Text(session.date, format: .dateTime.year().month().day().hour().minute())
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                }
+                Text(session.title)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
                 
                 HStack {
                     // Source Icon
                     Label(l10n.t(session.resolvedSource.labelEn, ru: session.resolvedSource.labelRu), systemImage: session.resolvedSource.icon)
-                        .font(.caption)
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                         .padding(.trailing, 4)
                     
@@ -154,7 +140,7 @@ struct SessionCard: View {
                     Text("•")
                     Text(formatDuration(session.duration))
                 }
-                .font(.caption)
+                .font(.system(size: 13))
                 .foregroundColor(.secondary)
             }
             
@@ -212,6 +198,7 @@ struct SessionCard: View {
                         .buttonStyle(.borderedProminent)
                         .tint(needsUpdate ? .orange : .accentColor)
                         .controlSize(.small)
+                        .disabled(session.isProcessing)
 
                         if let d = session.analysisUpdatedAt {
                             Text(lastAnalyzedString(d))
@@ -273,8 +260,8 @@ struct SessionCard: View {
 struct SessionEditSheet: View {
     let session: Session
     @ObservedObject var viewModel: AppViewModel
-    @Binding var isPresented: Bool
     @EnvironmentObject private var l10n: LocalizationService
+    @Environment(\.dismiss) private var dismiss
     @State private var title: String = ""
     @State private var category: SessionCategory = .personal
     
@@ -300,7 +287,7 @@ struct SessionEditSheet: View {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
-                Button(l10n.t("Cancel", ru: "Отмена")) { isPresented = false }
+                Button(l10n.t("Cancel", ru: "Отмена")) { dismiss() }
             }
         }
         .padding()
@@ -319,6 +306,6 @@ struct SessionEditSheet: View {
         if viewModel.selectedSession?.id == updated.id {
             viewModel.selectedSession = updated
         }
-        isPresented = false
+        dismiss()
     }
 }

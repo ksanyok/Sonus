@@ -13,6 +13,9 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
     var isProcessing: Bool = false
     var category: SessionCategory = .personal
     var customTitle: String? = nil
+    /// Original filename/title for imported content, used until analysis generates a better title.
+    var importedName: String? = nil
+    /// Optional to keep backward compatibility with older persisted sessions.
     var source: SessionSource? = nil
     
     var resolvedSource: SessionSource {
@@ -22,6 +25,9 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
     var title: String {
         if let customTitle = customTitle, !customTitle.isEmpty {
             return customTitle
+        }
+        if let importedName, !importedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return importedName
         }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -42,11 +48,19 @@ struct Session: Identifiable, Codable, Equatable, Hashable {
 enum SessionSource: String, Codable {
     case recording
     case importFile
+    case notes
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = SessionSource(rawValue: raw) ?? .importFile
+    }
     
     var icon: String {
         switch self {
         case .recording: return "mic.fill"
         case .importFile: return "square.and.arrow.down.fill"
+        case .notes: return "note.text"
         }
     }
     
@@ -54,6 +68,7 @@ enum SessionSource: String, Codable {
         switch self {
         case .recording: return "Recording"
         case .importFile: return "Imported"
+        case .notes: return "Notes"
         }
     }
     
@@ -61,6 +76,7 @@ enum SessionSource: String, Codable {
         switch self {
         case .recording: return "Запись"
         case .importFile: return "Импорт"
+        case .notes: return "Заметки"
         }
     }
 }

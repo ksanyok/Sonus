@@ -59,6 +59,11 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
             .assign(to: \.sessions, on: self)
             .store(in: &cancellables)
 
+        // Best-effort: fix legacy sessions that have 0 duration (often due to AVAsset duration not being loaded yet).
+        Task { [weak self] in
+            await self?.refreshMissingDurationsIfNeeded()
+        }
+
         audioRecorder.$isRecording
             .receive(on: RunLoop.main)
             .assign(to: \.isRecording, on: self)
@@ -168,55 +173,149 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
     }
     
     func importAudio(from url: URL) {
-        let fileManager = FileManager.default
-        let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let newFilename = UUID().uuidString + ".m4a" // Convert or just copy? Ideally convert to m4a if needed, but copy is safer for now.
-        // Actually, let's keep original extension or use m4a if we can.
-        // For simplicity, let's use the original extension or .m4a if we convert.
-        // But `Session` expects `audioFilename` which is relative to Documents.
-        
-        let destinationURL = documentsPath.appendingPathComponent(newFilename)
-        
-        do {
-            // Check if we need to convert or just copy.
-            // For now, simple copy. If format is not supported, AVPlayer might fail.
-            // Ideally we should transcode to m4a/aac, but let's start with copy.
-            try fileManager.copyItem(at: url, to: destinationURL)
-            
-            // Get duration
-            let asset = AVURLAsset(url: destinationURL)
-            let duration = CMTimeGetSeconds(asset.duration)
-            
-            let newSession = Session(
-                id: UUID(),
-                date: Date(),
-                duration: duration,
-                audioFilename: newFilename,
-                transcript: nil,
-                analysis: nil,
-                analysisUpdatedAt: nil,
-                analysisSchemaVersion: nil,
-                isProcessing: false,
-                category: draftCategory, // Use current draft category
-                customTitle: draftTitle.isEmpty ? url.deletingPathExtension().lastPathComponent : draftTitle,
-                source: .importFile
-            )
-            
-            persistence.saveSession(newSession)
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.draftTitle = ""
-                self?.draftCategory = .personal
-                // Optionally select the new session
-                // self?.selectedSession = newSession
-            }
-            
-        } catch {
-            DispatchQueue.main.async { [weak self] in
-                self?.errorMessage = "Failed to import audio: \(error.localizedDescription)"
-                self?.showError = true
+        Task {
+            let fileManager = FileManager.default
+            let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let originalExt = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
+            let newFilename = UUID().uuidString + "." + originalExt
+            let destinationURL = documentsPath.appendingPathComponent(newFilename)
+
+            do {
+                try fileManager.copyItem(at: url, to: destinationURL)
+
+                let asset = AVURLAsset(url: destinationURL)
+                let durationTime = try await asset.load(.duration)
+                let seconds = CMTimeGetSeconds(durationTime)
+                let duration = seconds.isFinite ? seconds : 0
+
+                let detectedSource: SessionSource = inferImportedSource(from: url)
+                let importedName = url.deletingPathExtension().lastPathComponent
+
+                let newSession = Session(
+                    id: UUID(),
+                    date: Date(),
+                    duration: duration,
+                    audioFilename: newFilename,
+                    transcript: nil,
+                    analysis: nil,
+                    analysisUpdatedAt: nil,
+                    analysisSchemaVersion: nil,
+                    isProcessing: false,
+                    category: draftCategory,
+                    customTitle: draftTitle.isEmpty ? nil : draftTitle,
+                    importedName: importedName,
+                    source: detectedSource
+                )
+
+                await MainActor.run { [weak self] in
+                    self?.persistence.saveSession(newSession)
+                    self?.draftTitle = ""
+                    self?.draftCategory = .personal
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.errorMessage = "Failed to import audio: \(error.localizedDescription)"
+                    self?.showError = true
+                }
             }
         }
+    }
+
+    @MainActor
+    private func refreshMissingDurationsIfNeeded() async {
+        let candidates = sessions.filter { $0.duration <= 0.01 }
+        guard !candidates.isEmpty else { return }
+
+        for s in candidates {
+            let audioURL = persistence.getAudioURL(for: s.audioFilename)
+            let asset = AVURLAsset(url: audioURL)
+            do {
+                let durationTime = try await asset.load(.duration)
+                let seconds = CMTimeGetSeconds(durationTime)
+                let duration = seconds.isFinite ? seconds : 0
+                guard duration > 0.01 else { continue }
+                var updated = s
+                updated.duration = duration
+                persistence.saveSession(updated)
+            } catch {
+                // Best-effort only.
+                continue
+            }
+        }
+    }
+
+    private func inferImportedSource(from url: URL) -> SessionSource {
+        // Heuristic: Voice Memos embedded in Apple Notes often live under the Notes group container.
+        // We can’t guarantee this for all setups, so fall back to generic import.
+        let path = url.path.lowercased()
+        if path.contains("group.com.apple.notes") || path.contains("/notes/") {
+            return .notes
+        }
+        return .importFile
+    }
+
+    private func shouldAutoTitle(_ session: Session) -> Bool {
+        // Auto-title when user hasn't set a meaningful title.
+        // Treat "imported filename" titles as placeholders too.
+        guard let tRaw = session.customTitle else { return true }
+        let t = tRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return true }
+        if let imported = session.importedName?.trimmingCharacters(in: .whitespacesAndNewlines), !imported.isEmpty {
+            if t.caseInsensitiveCompare(imported) == .orderedSame { return true }
+        }
+        return false
+    }
+
+    private func autoTitle(for session: Session, analysis: Analysis) -> String? {
+        // Prefer entities (company/product), then client insights, then summary.
+        let company = analysis.extractedEntities?.companies?.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let product = analysis.extractedEntities?.products?.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let insight = analysis.clientInsights?.summary?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let candidate: String? = {
+            if let company, !company.isEmpty, let product, !product.isEmpty {
+                return "\(company) — \(product)"
+            }
+            if let company, !company.isEmpty {
+                return company
+            }
+            if let product, !product.isEmpty {
+                return product
+            }
+            if let insight, !insight.isEmpty {
+                return insight
+            }
+            return analysis.summary
+        }()
+
+        if let s = sanitizeTitle(candidate) {
+            return s
+        }
+
+        // Fallback: first ~8 words of summary.
+        let cleaned = analysis.summary
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = cleaned.split(whereSeparator: { $0.isWhitespace })
+        guard !words.isEmpty else { return nil }
+        return words.prefix(8).joined(separator: " ")
+    }
+
+    private func sanitizeTitle(_ raw: String?) -> String? {
+        guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        s = s.replacingOccurrences(of: "\n", with: " ")
+        while s.contains("  ") { s = s.replacingOccurrences(of: "  ", with: " ") }
+
+        // Keep it short for UI.
+        let maxLen = 64
+        if s.count > maxLen {
+            let idx = s.index(s.startIndex, offsetBy: maxLen)
+            s = String(s[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        s = s.trimmingCharacters(in: CharacterSet(charactersIn: "—-–:;,."))
+        return s.isEmpty ? nil : s
     }
 
     private func startLivePipelineIfNeeded() {
@@ -323,7 +422,9 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
     }
     
     func processSession(_ session: Session) {
-        guard sessions.contains(where: { $0.id == session.id }) else { return }
+        guard let current = sessions.first(where: { $0.id == session.id }) else { return }
+        // Block repeated launches immediately.
+        if current.isProcessing || processingStatus[session.id] != nil { return }
         
         var updatedSession = session
         updatedSession.isProcessing = true
@@ -361,6 +462,13 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                 updatedSession.analysis = analysis
                 updatedSession.analysisUpdatedAt = Date()
                 updatedSession.analysisSchemaVersion = OpenAIClient.analysisSchemaVersion
+
+                // Auto-generate a title after analysis (when user didn't set one).
+                if self.shouldAutoTitle(updatedSession),
+                   let generated = self.autoTitle(for: updatedSession, analysis: analysis) {
+                    updatedSession.customTitle = generated
+                }
+
                 updatedSession.isProcessing = false
                 persistence.saveSession(updatedSession)
 

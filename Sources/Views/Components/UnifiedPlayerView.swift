@@ -127,12 +127,21 @@ struct UnifiedPlayerView: View {
                     GeometryReader { geo in
                         let width = geo.size.width
                         let duration = max(1, session.duration)
-                        
-                        ForEach(Array(analysis.keyMoments.enumerated()), id: \.offset) { _, moment in
-                            if let time = parseTimeHint(moment.timeHint), time <= duration {
-                                let x = width * CGFloat(time / duration)
-                                MarkerButton(moment: moment, x: x)
-                            }
+
+                        let moments = analysis.keyMoments
+                        ForEach(Array(moments.enumerated()), id: \.offset) { idx, moment in
+                            let parsed = TimelinePointBuilder.parseTimeHintSeconds(moment.timeHint ?? "")
+                            let fallbackTime: TimeInterval = {
+                                guard moments.count > 1 else { return duration * 0.5 }
+                                return (duration * Double(idx + 1)) / Double(moments.count + 1)
+                            }()
+
+                            let time = (parsed != nil && (parsed ?? 0) <= duration) ? (parsed ?? fallbackTime) : fallbackTime
+                            let x = width * CGFloat(min(max(time / duration, 0), 1))
+                            MarkerButton(moment: moment, x: x, seekSeconds: time, onSeek: { t in
+                                audioPlayer.seek(to: t)
+                            })
+                            .zIndex(Double(idx))
                         }
                     }
                     .frame(height: 64)
@@ -147,35 +156,32 @@ struct UnifiedPlayerView: View {
         .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
     }
     
-    private func parseTimeHint(_ hint: String?) -> TimeInterval? {
-        guard let hint = hint, !hint.isEmpty else { return nil }
-        
-        // Try MM:SS or HH:MM:SS
-        let parts = hint.split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
-        if parts.count == 3 {
-            return parts[0] * 3600 + parts[1] * 60 + parts[2]
-        } else if parts.count == 2 {
-            return parts[0] * 60 + parts[1]
-        }
-        
-        // Try "10m 5s" or "10:05" with text
-        // Simple regex-like approach
-        let range = NSRange(location: 0, length: hint.utf16.count)
-        let regex = try? NSRegularExpression(pattern: "(\\d+)\\s*m\\s*(\\d+)?", options: .caseInsensitive)
-        if let match = regex?.firstMatch(in: hint, options: [], range: range) {
-            let minStr = (hint as NSString).substring(with: match.range(at: 1))
-            let secStr = match.range(at: 2).location != NSNotFound ? (hint as NSString).substring(with: match.range(at: 2)) : "0"
-            return (Double(minStr) ?? 0) * 60 + (Double(secStr) ?? 0)
-        }
-        
-        return nil
-    }
+    // Time parsing moved to TimelinePointBuilder.parseTimeHintSeconds(_:) to keep behavior consistent across the app.
 }
 
 struct MarkerButton: View {
     let moment: KeyMoment
     let x: CGFloat
-    @State private var isHovered = false
+    let seekSeconds: TimeInterval
+    let onSeek: ((TimeInterval) -> Void)?
+
+    private var hoverTooltip: String {
+        var parts: [String] = []
+        if let th = moment.timeHint, !th.isEmpty {
+            parts.append(th)
+        }
+        if let t = moment.type, !t.isEmpty {
+            parts.append(t)
+        }
+        if let s = moment.speaker, !s.isEmpty {
+            parts.append(s)
+        }
+        parts.append(moment.text)
+        if let rec = moment.recommendation, !rec.isEmpty {
+            parts.append(rec)
+        }
+        return parts.joined(separator: " — ")
+    }
     
     var markerColor: Color {
         switch moment.severity {
@@ -187,58 +193,21 @@ struct MarkerButton: View {
     }
     
     var body: some View {
-        ZStack {
-            Image(systemName: "bookmark.fill")
-                .font(.system(size: 12))
-                .foregroundColor(markerColor)
-                .background(Circle().fill(.white).frame(width: 16, height: 16))
-                .shadow(radius: 2)
-                .scaleEffect(isHovered ? 1.5 : 1.0)
-                .animation(.spring(), value: isHovered)
-            
-            if isHovered {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(moment.type?.uppercased() ?? "MOMENT")
-                            .font(.caption2.bold())
-                            .foregroundColor(markerColor)
-                        Spacer()
-                        if let sev = moment.severity {
-                            Text(sev.uppercased())
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    Text(moment.text)
-                        .font(.caption)
-                        .foregroundColor(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    if let rec = moment.recommendation, !rec.isEmpty {
-                        Divider()
-                        HStack(alignment: .top, spacing: 4) {
-                            Image(systemName: "lightbulb.fill")
-                                .font(.caption2)
-                                .foregroundColor(.yellow)
-                            Text(rec)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .padding(8)
-                .frame(width: 220)
-                .background(Color(nsColor: .windowBackgroundColor))
-                .cornerRadius(8)
-                .shadow(radius: 4)
-                .offset(y: -80) // Show above the marker
+        Button {
+            onSeek?(seekSeconds)
+        } label: {
+            ZStack {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(markerColor)
+                    .background(Circle().fill(.white).frame(width: 16, height: 16))
+                    .shadow(radius: 2)
             }
+            .frame(width: 18, height: 64)
+            .contentShape(Rectangle())
         }
-        .position(x: x, y: 32) // Centered vertically in the 64px height
-        .onHover { hover in
-            isHovered = hover
-        }
+        .buttonStyle(.plain)
+        .position(x: x, y: 32)
+        .help(hoverTooltip)
     }
 }
