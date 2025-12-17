@@ -201,10 +201,7 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
             do {
                 try fileManager.copyItem(at: url, to: destinationURL)
 
-                let asset = AVURLAsset(url: destinationURL)
-                let durationTime = try await asset.load(.duration)
-                let seconds = CMTimeGetSeconds(durationTime)
-                let duration = seconds.isFinite ? seconds : 0
+                let duration = await AudioDurationUtils.loadDurationSeconds(url: destinationURL)
 
                 let detectedSource: SessionSource = inferImportedSource(from: url)
                 let importedName = url.deletingPathExtension().lastPathComponent
@@ -247,11 +244,8 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
 
         for s in candidates {
             let audioURL = persistence.getAudioURL(for: s.audioFilename)
-            let asset = AVURLAsset(url: audioURL)
             do {
-                let durationTime = try await asset.load(.duration)
-                let seconds = CMTimeGetSeconds(durationTime)
-                let duration = seconds.isFinite ? seconds : 0
+                let duration = await AudioDurationUtils.loadDurationSeconds(url: audioURL)
                 guard duration > 0.01 else { continue }
                 var updated = s
                 updated.duration = duration
