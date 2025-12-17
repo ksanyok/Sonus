@@ -153,6 +153,67 @@ struct SettingsView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
                 
+                // About Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(l10n.t("About", ru: "О приложении"))
+                        .font(.headline)
+                    
+                    HStack(alignment: .top, spacing: 16) {
+                        if let icon = NSImage(named: "AppIcon") {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .frame(width: 64, height: 64)
+                        } else {
+                            Image(systemName: "waveform.circle.fill")
+                                .resizable()
+                                .frame(width: 64, height: 64)
+                                .foregroundColor(.accentColor)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sonus")
+                                .font(.title3)
+                                .bold()
+                            Text(l10n.t("Version 1.0", ru: "Версия 1.0"))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Text(l10n.t("Developed by BuyReadySite.com", ru: "Разработано BuyReadySite.com"))
+                                .font(.caption)
+                                .foregroundColor(.accentColor)
+                                .onTapGesture {
+                                    if let url = URL(string: "https://buyreadysite.com") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .onHover { isHovered in
+                                    NSCursor.pointingHand.set()
+                                }
+                        }
+                    }
+                    
+                    Text(l10n.t("Sonus is your personal AI meeting assistant. It records, transcribes, and analyzes conversations to help you be more effective.", ru: "Sonus — ваш персональный AI-ассистент для встреч. Записывает, транскрибирует и анализирует разговоры, помогая вам быть эффективнее."))
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 4)
+                    
+                    Divider()
+                    
+                    Text(l10n.t("Technical Requirements:", ru: "Технические требования:"))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("macOS 14.0+", systemImage: "desktopcomputer")
+                        Label(l10n.t("Microphone Access", ru: "Доступ к микрофону"), systemImage: "mic")
+                        Label(l10n.t("OpenAI API Key", ru: "API ключ OpenAI"), systemImage: "key")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+                
                 HStack {
                     Spacer()
                     Button(l10n.t("Save", ru: "Сохранить")) { saveSettings() }

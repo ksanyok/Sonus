@@ -9,6 +9,7 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $selectedSidebarItem)
+                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
         } detail: {
             NavigationStack(path: $navigationPath) {
                 switch selectedSidebarItem {
@@ -32,7 +33,7 @@ struct MainWindow: View {
                 SessionDetailView(sessionID: id, viewModel: viewModel)
             }
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .frame(minWidth: 1100, minHeight: 800)
         .alert(l10n.t("Error", ru: "Ошибка"), isPresented: $viewModel.showError) {
             Button(l10n.t("OK", ru: "ОК"), role: .cancel) { }
         } message: {

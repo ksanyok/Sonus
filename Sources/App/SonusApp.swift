@@ -139,6 +139,12 @@ struct SonusApp: App {
                 }
         }
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button(l10n.t("About Sonus", ru: "О приложении Sonus")) {
+                    openWindow(id: "about")
+                }
+            }
+            
             CommandMenu(l10n.t("Recording", ru: "Запись")) {
                 Button(l10n.t("Toggle Recording", ru: "Переключить запись")) {
                     if viewModel.audioRecorder.isRecording {
@@ -179,5 +185,12 @@ struct SonusApp: App {
         .windowResizability(.contentSize)
         .defaultSize(width: 160, height: 120)
         .handlesExternalEvents(matching: Set(arrayLiteral: "toggle-mini"))
+        
+        Window("About Sonus", id: "about") {
+            AboutView()
+                .environmentObject(l10n)
+        }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 600, height: 380)
     }
 }
