@@ -24,7 +24,7 @@ enum OpenAIError: Error, LocalizedError {
 class OpenAIClient {
     static let shared = OpenAIClient()
     /// Bump when the analysis JSON schema / prompts change in a way that should trigger re-analysis.
-    static let analysisSchemaVersion: Int = 4
+    static let analysisSchemaVersion: Int = 5
     private let baseURL = "https://api.openai.com/v1"
 
     private lazy var session: URLSession = {
@@ -234,7 +234,13 @@ class OpenAIClient {
         return try JSONDecoder().decode(LiveHintResponse.self, from: data)
     }
     
-    func analyze(text: String, playbook: Playbook = .sales, customVocabulary: String = "") async throws -> Analysis {
+    func analyze(
+        text: String,
+        playbook: Playbook = .sales,
+        customVocabulary: String = "",
+        scenarioTitle: String? = nil,
+        scenarioInstruction: String? = nil
+    ) async throws -> Analysis {
         guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
 
         let condensed = try await condensedTranscriptIfNeeded(text)
@@ -248,8 +254,8 @@ class OpenAIClient {
                 let prompt = """
                 Проанализируй стенограмму разговора.
                 
-                Сценарий анализа: \(playbook.displayName)
-                Инструкция: \(playbook.promptInstruction)
+                Сценарий анализа: \(scenarioTitle ?? playbook.displayName)
+                Инструкция: \(scenarioInstruction ?? playbook.promptInstruction)
                 
                 Словарь (термины, которые могут встречаться): \(customVocabulary)
 
@@ -267,6 +273,7 @@ class OpenAIClient {
                 - participants: массив строк (имена/роли, если можно понять).
                 - speakerCount: число говорящих (если уверенно).
                 - languages: массив языков.
+                    Правило: если в разговоре несколько языков — перечисли уникальные языки.
                 - engagementScore: 0..100 (насколько клиент вовлечён).
                 - salesProbability: 0..100 (вероятность сделки/конверсии).
                 - objections: массив возражений.
@@ -346,6 +353,7 @@ class OpenAIClient {
                 - speakerInsights: массив объектов {
                         name: строка (имя/ярлык говорящего из текста, например "Иван" или "Клиент"),
                         role: строка|null,
+                    language: строка|null (язык говорящего, например "ru"/"en" или название языка),
                         activityScore: 0..100|null,
                         competenceScore: 0..100|null,
                         emotionControlScore: 0..100|null,

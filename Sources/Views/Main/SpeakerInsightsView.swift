@@ -61,6 +61,17 @@ struct SpeakerInsightsView: View {
                         }
                         .width(min: 120, ideal: 160)
 
+                        TableColumn(l10n.t("Lang", ru: "Язык")) { s in
+                            if let lang = s.language, !lang.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text("\(LanguageUtils.flagEmoji(forLanguageRaw: lang)) \(lang)")
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("—")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .width(min: 90, ideal: 110)
+
                         TableColumn(l10n.t("Activity", ru: "Активность")) { s in
                             ScoreCell(score: s.activityScore)
                         }
@@ -92,6 +103,12 @@ struct SpeakerInsightsView: View {
 
                             if let role = selected.role, !role.isEmpty {
                                 Text(role)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            if let lang = selected.language, !lang.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text("\(LanguageUtils.flagEmoji(forLanguageRaw: lang)) \(l10n.t("Language", ru: "Язык")): \(lang)")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

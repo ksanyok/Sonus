@@ -129,6 +129,61 @@ enum SessionCategory: String, Codable, CaseIterable, Identifiable {
         case .other: return "archivebox.fill"
         }
     }
+
+    var analysisScenarioTitleRu: String {
+        switch self {
+        case .personal: return "Личная беседа"
+        case .clients: return "Разговор с клиентом / продажи"
+        case .conferences: return "Конференция / выступление"
+        case .meetings: return "Рабочая встреча"
+        case .other: return "Общий анализ"
+        }
+    }
+
+    /// Extra instruction appended to the prompt (Russian, because the analysis response is in Russian).
+    var analysisScenarioInstructionRu: String {
+        switch self {
+        case .personal:
+            return """
+            Фокус: личная беседа.
+            Выдели: ключевые темы, эмоции, важные решения/выводы, что было важно для участников.
+            Особое внимание: поддержка/эмпатия, границы, конфликтные моменты, договоренности и планы.
+            """
+        case .clients:
+            return """
+            Фокус: продажи/переговоры с клиентом.
+            Выдели: потребности, боли, критерии выбора, бюджет/сроки (если были), возражения и сигналы покупки.
+            Обязательно: конкретные next steps и что улучшить в коммуникации.
+            """
+        case .conferences:
+            return """
+            Фокус: конференция/доклад/выступление.
+            Выдели: ключевые тезисы, новые идеи, спорные моменты, практические выводы.
+            Обязательно: список action items/следующих шагов (что применить/проверить/прочитать).
+            """
+        case .meetings:
+            return """
+            Фокус: рабочая встреча.
+            Выдели: решения, договоренности, задачи (action items), блокеры/риски, сроки и владельцев.
+            Особое внимание: ясность формулировок и ответственность.
+            """
+        case .other:
+            return """
+            Фокус: общий анализ.
+            Выдели: темы, решения, риски, договоренности и рекомендации по улучшению коммуникации.
+            """
+        }
+    }
+
+    var defaultPlaybook: Playbook {
+        switch self {
+        case .clients: return .sales
+        case .personal: return .general
+        case .meetings: return .general
+        case .conferences: return .general
+        case .other: return .general
+        }
+    }
 }
 
 struct Analysis: Codable, Equatable, Hashable {
@@ -259,6 +314,9 @@ struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
     var name: String
     var role: String?
 
+    /// Primary language of this speaker (e.g. "ru", "en", or a language name). Optional for backward compatibility.
+    var language: String?
+
     // Scores 0..100 (nullable if uncertain)
     var activityScore: Int?
     var competenceScore: Int?
@@ -274,6 +332,7 @@ struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case name
         case role
+        case language
         case activityScore
         case competenceScore
         case emotionControlScore
@@ -288,6 +347,7 @@ struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
         id: UUID = UUID(),
         name: String,
         role: String? = nil,
+        language: String? = nil,
         activityScore: Int? = nil,
         competenceScore: Int? = nil,
         emotionControlScore: Int? = nil,
@@ -300,6 +360,7 @@ struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
         self.id = id
         self.name = name
         self.role = role
+        self.language = language
         self.activityScore = activityScore
         self.competenceScore = competenceScore
         self.emotionControlScore = emotionControlScore
@@ -315,6 +376,7 @@ struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
         id = UUID()
         name = (try? c.decode(String.self, forKey: .name)) ?? ""
         role = try? c.decode(String.self, forKey: .role)
+        language = try? c.decode(String.self, forKey: .language)
         activityScore = try? c.decode(Int.self, forKey: .activityScore)
         competenceScore = try? c.decode(Int.self, forKey: .competenceScore)
         emotionControlScore = try? c.decode(Int.self, forKey: .emotionControlScore)
@@ -329,6 +391,7 @@ struct SpeakerInsight: Codable, Equatable, Hashable, Identifiable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(name, forKey: .name)
         try c.encodeIfPresent(role, forKey: .role)
+        try c.encodeIfPresent(language, forKey: .language)
         try c.encodeIfPresent(activityScore, forKey: .activityScore)
         try c.encodeIfPresent(competenceScore, forKey: .competenceScore)
         try c.encodeIfPresent(emotionControlScore, forKey: .emotionControlScore)

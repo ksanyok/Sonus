@@ -193,7 +193,11 @@ struct SessionHeaderView: View {
                         if !analysis.languages.isEmpty {
                             HStack(spacing: 4) {
                                 Image(systemName: "globe")
-                                Text(analysis.languages.joined(separator: ", "))
+                                Text(
+                                    analysis.languages
+                                        .map { "\(LanguageUtils.flagEmoji(forLanguageRaw: $0)) \($0)" }
+                                        .joined(separator: ", ")
+                                )
                             }
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)

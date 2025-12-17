@@ -476,7 +476,21 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                     self?.processingStatus[session.id] = "Анализ (JSON)…"
                     self?.processingProgress[session.id] = 0.92
                 }
-                let analysis = try await openAI.analyze(text: transcript, playbook: self.selectedPlaybook, customVocabulary: self.customVocabulary)
+                let playbook: Playbook = {
+                    // Category drives the analysis scenario; keep manual selection only for "Other".
+                    if session.category == .other {
+                        return self.selectedPlaybook
+                    }
+                    return session.category.defaultPlaybook
+                }()
+
+                let analysis = try await openAI.analyze(
+                    text: transcript,
+                    playbook: playbook,
+                    customVocabulary: self.customVocabulary,
+                    scenarioTitle: session.category.analysisScenarioTitleRu,
+                    scenarioInstruction: session.category.analysisScenarioInstructionRu
+                )
                 
                 updatedSession.analysis = analysis
                 updatedSession.analysisUpdatedAt = Date()
