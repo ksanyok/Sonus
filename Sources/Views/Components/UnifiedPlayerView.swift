@@ -10,13 +10,16 @@ struct UnifiedPlayerView: View {
     @State private var isDragging = false
     @State private var dragTime: TimeInterval = 0
 
+    private var audioURL: URL {
+        PersistenceService.shared.getAudioURL(for: session.audioFilename)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // Top Controls
             HStack(spacing: 16) {
                 Button(action: {
-                    let url = PersistenceService.shared.getAudioURL(for: session.audioFilename)
-                    audioPlayer.togglePlayback(audioURL: url)
+                    audioPlayer.togglePlayback(audioURL: audioURL)
                 }) {
                     Image(systemName: audioPlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 48))
@@ -83,6 +86,8 @@ struct UnifiedPlayerView: View {
                     let width = geo.size.width
                     let duration = max(1, session.duration)
                     let currentX = width * CGFloat((isDragging ? dragTime : audioPlayer.currentTime) / duration)
+                    let labelX = min(max(currentX, 40), width - 40)
+                    let labelTime = isDragging ? dragTime : audioPlayer.currentTime
 
                     ZStack(alignment: .leading) {
                         // Masked fill for played portion
@@ -99,6 +104,17 @@ struct UnifiedPlayerView: View {
                             .frame(width: 4, height: 64)
                             .position(x: currentX, y: 32)
                             .shadow(color: .purple.opacity(0.5), radius: 4, x: 0, y: 0)
+
+                        // On-bar time label
+                        Text(TimelinePointBuilder.formatHMS(labelTime))
+                            .monospacedDigit()
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.regularMaterial)
+                            .clipShape(Capsule())
+                            .position(x: labelX, y: 10)
                     }
                     
                     // Interaction Layer
@@ -115,7 +131,7 @@ struct UnifiedPlayerView: View {
                                 .onEnded { value in
                                     let ratio = min(max(value.location.x / width, 0), 1)
                                     let time = ratio * duration
-                                    audioPlayer.seek(to: time)
+                                    audioPlayer.seek(to: time, audioURL: audioURL)
                                     isDragging = false
                                 }
                         )
@@ -139,7 +155,7 @@ struct UnifiedPlayerView: View {
                             let time = (parsed != nil && (parsed ?? 0) <= duration) ? (parsed ?? fallbackTime) : fallbackTime
                             let x = width * CGFloat(min(max(time / duration, 0), 1))
                             MarkerButton(moment: moment, x: x, seekSeconds: time, onSeek: { t in
-                                audioPlayer.seek(to: t)
+                                audioPlayer.seek(to: t, audioURL: audioURL)
                             })
                             .zIndex(Double(idx))
                         }

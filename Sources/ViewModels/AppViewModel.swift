@@ -20,6 +20,9 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
 
     @Published var processingStatus: [UUID: String] = [:]
     @Published var processingProgress: [UUID: Double] = [:]
+
+    @Published var isImportingAudio: Bool = false
+    @Published var pendingOpenSessionID: UUID? = nil
     
     @Published var selectedPlaybook: Playbook = {
         if let saved = UserDefaults.standard.string(forKey: "selectedPlaybook"),
@@ -160,6 +163,11 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                 source: .recording
             )
             persistence.saveSession(newSession)
+
+            // After save, navigate straight to the new session.
+            DispatchQueue.main.async { [weak self] in
+                self?.pendingOpenSessionID = newSession.id
+            }
             // reset drafts
             DispatchQueue.main.async { [weak self] in
                 self?.draftTitle = ""
@@ -174,6 +182,16 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
     
     func importAudio(from url: URL) {
         Task {
+            await MainActor.run { [weak self] in
+                self?.isImportingAudio = true
+            }
+
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.isImportingAudio = false
+                }
+            }
+
             let fileManager = FileManager.default
             let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let originalExt = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
@@ -211,6 +229,7 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
                     self?.persistence.saveSession(newSession)
                     self?.draftTitle = ""
                     self?.draftCategory = .personal
+                    self?.pendingOpenSessionID = newSession.id
                 }
             } catch {
                 await MainActor.run { [weak self] in

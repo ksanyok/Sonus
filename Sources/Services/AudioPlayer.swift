@@ -7,22 +7,38 @@ class AudioPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var duration: TimeInterval = 0
     
     private var audioPlayer: AVAudioPlayer?
+    private var loadedURL: URL?
     private var timer: Timer?
     
     override init() {
         super.init()
     }
+
+    private func ensurePlayer(audioURL: URL) throws -> AVAudioPlayer {
+        if let player = audioPlayer, loadedURL == audioURL {
+            return player
+        }
+
+        stopTimer()
+        isPlaying = false
+
+        let newPlayer = try AVAudioPlayer(contentsOf: audioURL)
+        newPlayer.delegate = self
+        newPlayer.prepareToPlay()
+
+        audioPlayer = newPlayer
+        loadedURL = audioURL
+        duration = newPlayer.duration
+        currentTime = newPlayer.currentTime
+
+        return newPlayer
+    }
     
     func startPlayback(audioURL: URL) {
         do {
-            audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
-            audioPlayer?.delegate = self
-            audioPlayer?.prepareToPlay()
-            audioPlayer?.play()
-            
+            let player = try ensurePlayer(audioURL: audioURL)
+            player.play()
             isPlaying = true
-            duration = audioPlayer?.duration ?? 0
-            
             startTimer()
         } catch {
             print("Playback failed: \(error)")
@@ -46,8 +62,21 @@ class AudioPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     func seek(to time: TimeInterval) {
         guard let player = audioPlayer else { return }
-        player.currentTime = time
-        currentTime = time
+        let clamped = min(max(time, 0), max(0, player.duration))
+        player.currentTime = clamped
+        currentTime = clamped
+    }
+
+    func seek(to time: TimeInterval, audioURL: URL) {
+        do {
+            let player = try ensurePlayer(audioURL: audioURL)
+            let clamped = min(max(time, 0), max(0, player.duration))
+            player.currentTime = clamped
+            currentTime = clamped
+            duration = player.duration
+        } catch {
+            print("Seek failed: \(error)")
+        }
     }
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

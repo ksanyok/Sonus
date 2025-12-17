@@ -228,6 +228,25 @@ struct RecordView: View {
                                     }
                                     
                                     Divider().background(Color.white.opacity(0.2))
+
+                                    if viewModel.isImportingAudio {
+                                        HStack(spacing: 10) {
+                                            ProgressView()
+                                                .controlSize(.large)
+                                            Text(l10n.t("Importing audio…", ru: "Импортируем аудио…"))
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.white.opacity(0.9))
+                                        }
+                                        .padding(.vertical, 8)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.horizontal, 12)
+                                        .background(Color.white.opacity(0.08))
+                                        .cornerRadius(14)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                        )
+                                    }
                                     
                                     HStack(spacing: 12) {
                                         Button {
@@ -251,17 +270,33 @@ struct RecordView: View {
                                         .font(.system(size: 16, weight: .semibold))
                                     }
                                     
-                                    Button {
-                                        importAudio()
-                                    } label: {
-                                        Label(l10n.t("Import Audio / Voice Memo", ru: "Загрузить аудио / Диктофон"), systemImage: "square.and.arrow.down")
-                                            .frame(maxWidth: .infinity)
+                                    HStack(spacing: 10) {
+                                        Button {
+                                            importAudio()
+                                        } label: {
+                                            Label(l10n.t("Import", ru: "Импорт"), systemImage: "square.and.arrow.down")
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .tint(.secondary)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .disabled(viewModel.isImportingAudio)
+                                        .help(l10n.t("Import audio file (or drag & drop)", ru: "Загрузить файл (или перетащить сюда)"))
+
+                                        Button {
+                                            importFromNotes()
+                                        } label: {
+                                            Label(l10n.t("From Notes", ru: "Из Заметок"), systemImage: "note.text")
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .tint(.secondary)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .disabled(viewModel.isImportingAudio)
+                                        .help(l10n.t("Select an audio file exported from Apple Notes", ru: "Выберите аудио, экспортированное из Заметок"))
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                    .tint(.secondary)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .help(l10n.t("Import audio file or drag & drop here", ru: "Загрузить файл или перетащите сюда"))
                                 }
                                 .padding(22)
                             )
@@ -311,6 +346,24 @@ struct RecordView: View {
         panel.canChooseDirectories = false
         panel.message = l10n.t("Select an audio file or Voice Memo", ru: "Выберите аудиофайл или запись диктофона")
         
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                viewModel.importAudio(from: url)
+            }
+        }
+    }
+
+    private func importFromNotes() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = l10n.t(
+            "Select an audio file exported from Apple Notes (Share → Save to Files / AirDrop), or drag the attachment from Notes into Sonus.",
+            ru: "Выберите аудио, экспортированное из Заметок (Поделиться → Сохранить в Файлы / AirDrop), или перетащите вложение из Заметок в Sonus."
+        )
+        panel.prompt = l10n.t("Import", ru: "Импортировать")
+
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 viewModel.importAudio(from: url)

@@ -43,6 +43,15 @@ struct MainWindow: View {
             }
         }
         .frame(minWidth: 1100, minHeight: 800)
+        .onChange(of: viewModel.pendingOpenSessionID) { _, id in
+            guard let id else { return }
+            // Jump to the newly created/imported session so the user sees it was added.
+            navigationPath.removeAll()
+            viewModel.selectedSession = nil
+            selectedSidebarItem = .history
+            navigationPath.append(id)
+            viewModel.pendingOpenSessionID = nil
+        }
         .alert(l10n.t("Error", ru: "Ошибка"), isPresented: $viewModel.showError) {
             Button(l10n.t("OK", ru: "ОК"), role: .cancel) { }
         } message: {
