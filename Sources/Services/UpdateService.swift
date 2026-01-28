@@ -13,7 +13,7 @@ class UpdateService: ObservableObject {
     
     // ВАЖНО: Замените на ваш GitHub репозиторий в формате "username/repo"
     private let githubRepo = "ksanyok/Sonus"
-    private let currentVersion = "1.4" // Автоматически из Info.plist
+    private let currentVersion = "1.4.1" // Автоматически из Info.plist
     
     struct UpdateInfo: Codable {
         let version: String
@@ -28,24 +28,34 @@ class UpdateService: ObservableObject {
     /// Проверить наличие обновлений
     @MainActor
     func checkForUpdates(silent: Bool = false) async {
-        guard !isCheckingForUpdates else { return }
+        guard !isCheckingForUpdates else {
+            print("⏸️ Проверка уже выполняется")
+            return
+        }
         
         if !silent {
             isCheckingForUpdates = true
         }
         
+        print("🔍 Проверка обновлений...")
+        print("   Текущая версия: \(currentVersion)")
+        print("   GitHub репозиторий: \(githubRepo)")
+        
         do {
             let latestRelease = try await fetchLatestRelease()
             
+            print("   Последний релиз: v\(latestRelease.version)")
+            print("   Сравнение: \(latestRelease.version) > \(currentVersion)?")
+            
             if isNewerVersion(latestRelease.version, than: currentVersion) {
+                print("✅ ОБНОВЛЕНИЕ ДОСТУПНО: v\(latestRelease.version)")
                 updateAvailable = latestRelease
                 
                 if !silent {
-                    // Просто показываем что обновление доступно, не уведомляем
-                    print("✅ Доступно обновление: v\(latestRelease.version)")
+                    print("   URL загрузки: \(latestRelease.downloadURL)")
                 }
             } else {
-                // Обновлений нет
+                print("ℹ️ Обновлений нет - используется последняя версия")
                 updateAvailable = nil
                 if !silent {
                     // Показываем только при ручной проверке
@@ -54,10 +64,12 @@ class UpdateService: ObservableObject {
             }
             
         } catch {
+            print("❌ ОШИБКА проверки обновлений:")
+            print("   Тип: \(type(of: error))")
+            print("   Описание: \(error)")
             if !silent {
                 errorMessage = "Ошибка проверки обновлений: \(error.localizedDescription)"
             }
-            print("❌ Ошибка проверки обновлений: \(error)")
         }
         
         isCheckingForUpdates = false
@@ -106,7 +118,11 @@ class UpdateService: ObservableObject {
         // Используем GitHub API для получения последнего релиза
         // Для приватного репозитория релизы могут быть публичными
         let urlString = "https://api.github.com/repos/\(githubRepo)/releases/latest"
+        
+        print("   API URL: \(urlString)")
+        
         guard let url = URL(string: urlString) else {
+            print("   ❌ Невалидный URL")
             throw UpdateError.invalidURL
         }
         
@@ -116,19 +132,42 @@ class UpdateService: ObservableObject {
         // Если нужен приватный доступ, добавьте токен:
         // request.setValue("Bearer YOUR_GITHUB_TOKEN", forHTTPHeaderField: "Authorization")
         
+        print("   📡 Отправка запроса...")
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("   ❌ Не HTTPURLResponse")
             throw UpdateError.networkError
         }
         
+        print("   📨 Статус код: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            print("   ❌ Ошибка HTTP: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Ответ: \(responseString.prefix(200))")
+            }
+            throw UpdateError.networkError
+        }
+        
+        print("   ✅ Получен ответ, размер: \(data.count) байт")
+        
         let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+        
+        print("   Tag: \(release.tag_name)")
+        print("   Имя: \(release.name ?? "без имени")")
+        print("   Assets: \(release.assets.count)")
         
         // Ищем .zip файл в assets
         guard let zipAsset = release.assets.first(where: { $0.name.hasSuffix(".zip") }) else {
+            print("   ❌ ZIP файл не найден в assets")
+            release.assets.forEach { asset in
+                print("      - \(asset.name)")
+            }
             throw UpdateError.noZipFound
         }
+        
+        print("   ✅ Найден ZIP: \(zipAsset.name)")
         
         return UpdateInfo(
             version: release.tag_name.replacingOccurrences(of: "v", with: ""),
