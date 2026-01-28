@@ -13,7 +13,7 @@ class UpdateService: ObservableObject {
     
     // ВАЖНО: Замените на ваш GitHub репозиторий в формате "username/repo"
     private let githubRepo = "ksanyok/Sonus"
-    private let currentVersion = "1.3" // Автоматически из Info.plist
+    private let currentVersion = "1.4" // Автоматически из Info.plist
     
     struct UpdateInfo: Codable {
         let version: String

@@ -32,6 +32,14 @@ struct MainWindow: View {
                         DashboardView()
                     case .search:
                         GlobalSearchView()
+                    case .aiAssistant:
+                        // AI ассистент открывается в плавающем окне
+                        Text(l10n.t("AI Assistant", ru: "AI Ассистент"))
+                            .font(.title)
+                            .foregroundColor(.secondary)
+                            .onAppear {
+                                FloatingAssistantWindow.show()
+                            }
                     case .interviewAssistant:
                         InterviewAssistantView()
                     case .settings:

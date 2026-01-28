@@ -244,7 +244,7 @@ struct SettingsView: View {
                             Text("Sonus")
                                 .font(.title3)
                                 .bold()
-                            Text(l10n.t("Version 1.3", ru: "Версия 1.3"))
+                            Text(l10n.t("Version 1.4", ru: "Версия 1.4"))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             

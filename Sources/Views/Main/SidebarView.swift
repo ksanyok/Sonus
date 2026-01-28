@@ -51,9 +51,19 @@ struct SidebarView: View {
                 .padding(.vertical, 4)
             
             SidebarButton(
+                title: l10n.t("AI Assistant", ru: "AI Ассистент"),
+                icon: "waveform.circle.fill",
+                color: .green,
+                isSelected: selection == .aiAssistant
+            ) {
+                // Открываем плавающее окно
+                FloatingAssistantWindow.show()
+            }
+            
+            SidebarButton(
                 title: l10n.t("Interview Assistant", ru: "Помощник интервью"),
                 icon: "person.wave.2.fill",
-                color: .green,
+                color: .purple,
                 isSelected: selection == .interviewAssistant
             ) {
                 selection = .interviewAssistant
@@ -128,6 +138,7 @@ enum SidebarItem: Hashable {
     case history
     case analytics
     case search
+    case aiAssistant
     case interviewAssistant
     case settings
 }

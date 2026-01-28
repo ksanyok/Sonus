@@ -87,6 +87,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleMiniWindow()
         }
         
+        // Регистрация горячей клавиши для AI ассистента (Option + Space)
+        GlobalHotKeyService.shared.registerAssistantHotKey()
+        GlobalHotKeyService.shared.onAssistantHotKeyTriggered = {
+            FloatingAssistantWindow.toggle()
+        }
+        
         // Проверка обновлений при запуске (в фоне)
         Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 секунды после запуска

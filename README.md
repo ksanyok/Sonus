@@ -2,50 +2,75 @@
 
 Sonus is a macOS desktop application for recording, transcribing, and analyzing conversations using OpenAI's Whisper and ChatGPT models.
 
+## ✨ What's New in v1.4
+
+### 🚀 Universal AI Assistant
+- **Modern floating window** with ChatGPT-style design
+- **Multi-language support**: transcribe any language to your preferred target language
+- **Real-time engagement tracking** with intonation analysis
+- **Three modes**: Translation & Hints, Coaching, Smart Notes
+- **Hotkey**: `Option + Space` to toggle assistant
+
+### 🌍 Multi-Language Translation
+- Choose your target language: Russian, English, Ukrainian, German, French, Spanish
+- Automatic source language detection
+- Real-time translation while listening
+
+### 📊 Engagement Analysis
+- Dynamic engagement indicator (0-100%)
+- Color-coded levels: 🔴 Low / 🟡 Normal / 🟢 High
+- AI-powered recommendations when engagement drops
+- Intonation and sentiment analysis
+
+[Read full changelog →](release_notes_v1.4.md)
+
 ## Features
 
-- **Recording**: High-quality audio recording with visualization.
-- **Transcription**: Uses OpenAI Whisper API.
-- **Analytics**: Sentiment analysis, summary, participant detection using ChatGPT.
-- **UI**: Modern macOS interface with a mini-window for quick access.
-- **Privacy**: Local storage of audio and API keys.
+- **Recording**: High-quality audio recording with visualization
+- **Transcription**: Uses OpenAI Whisper API
+- **AI Assistant**: Real-time conversation support with engagement tracking
+- **Analytics**: Sentiment analysis, summary, participant detection using ChatGPT
+- **UI**: Modern macOS interface with mini-window and floating assistant
+- **Privacy**: Local storage of audio and API keys
+- **Auto-Update**: Automatic update checks from private GitHub repository
 
 ## Setup
 
 ### Prerequisites
 
-- macOS 14.0 or later (for best SwiftUI support).
-- Xcode 15+ installed.
-- OpenAI API Key.
+- macOS 13.0+ (Ventura or later)
+- Apple Silicon (arm64) recommended
+- OpenAI API Key
 
-### How to Run
+### Installation
 
-1. **Open in Xcode**:
-   - Open the `Sonus` folder in Xcode.
-   - Xcode should recognize the `Package.swift` and set up the scheme.
+1. **Download**: Get the latest release from [Releases](https://github.com/ksanyok/Sonus/releases)
+2. **Extract**: Unzip `Sonus.zip`
+3. **Install**: Drag `Sonus.app` to `/Applications`
+4. **Launch**: Open Sonus from Applications
 
-2. **Configure Permissions (Important)**:
-   - Since this app uses the Microphone, it requires `NSMicrophoneUsageDescription` in `Info.plist`.
-   - If you are generating an Xcode project (`swift package generate-xcodeproj`), you must manually add the `Info.plist` to the target settings.
-   - **Recommended**: Create a new macOS App project in Xcode, drag the `Sources` folder into it, and configure the `Info.plist` with the content provided in `Info.plist` file in this repo.
-   - Ensure "App Sandbox" is enabled and "Hardware -> Audio Input" is checked in the "Signing & Capabilities" tab.
+### First Run
 
-3. **Build and Run**:
-   - Select the target and press `Cmd+R`.
+1. Grant microphone permission when prompted
+2. Enter your OpenAI API key in Settings
+3. Start recording or activate AI Assistant
 
-## Architecture
+## Quick Start
 
-- **MVVM**: ViewModels manage state and business logic.
-- **Services**:
-  - `AudioRecorder`: Handles `AVAudioRecorder`.
-  - `OpenAIClient`: Handles API requests.
-  - `PersistenceService`: Manages local JSON storage.
-  - `KeychainService`: Securely stores the API key.
-- **Views**:
-  - `MainWindow`: Main dashboard.
-  - `MiniWindow`: Compact always-on-top recorder.
+### AI Assistant
+1. Press `Option + Space` to open floating assistant
+2. Configure target language and mode in settings (⚙️)
+3. Click "Start Recording"
+4. Speak or listen - get real-time transcription, translation, and suggestions
+
+### Regular Recording
+1. Open Sonus main window
+2. Click the large microphone button
+3. View live transcription and analytics
+4. Stop to save and analyze
 
 ## Hotkeys
 
-- `Cmd+Shift+R`: Start/Stop Recording.
+- `Option + Space`: Toggle AI Assistant (new in v1.4)
+- `Cmd + Shift + Space`: Show/hide mini recording window
 - `Cmd+Shift+M`: Toggle Mini Window.
