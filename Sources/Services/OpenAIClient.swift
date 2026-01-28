@@ -960,6 +960,77 @@ class OpenAIClient {
         default: return "application/octet-stream"
         }
     }
+    
+    // MARK: - Helper methods for InterviewAssistant
+    
+    /// Простой chat completion без JSON режима
+    func chatCompletion(messages: [[String: String]], temperature: Double = 0.7) async throws -> String {
+        guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
+        
+        let url = URL(string: "\(baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": messages,
+            "temperature": temperature
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (responseData, response) = try await dataWithRetry(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.networkError(URLError(.badServerResponse))
+        }
+        if !(200...299).contains(httpResponse.statusCode) {
+            if let errorJson = try? JSONDecoder().decode(APIErrorResponse.self, from: responseData) {
+                throw OpenAIError.apiError(errorJson.error.message)
+            }
+            throw OpenAIError.apiError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        let result = try JSONDecoder().decode(ChatCompletionResponse.self, from: responseData)
+        return result.choices.first?.message.content ?? ""
+    }
+    
+    /// Chat completion с JSON режимом
+    func chatCompletionJSON(messages: [[String: String]], temperature: Double = 0.7) async throws -> String {
+        guard let apiKey = apiKey, !apiKey.isEmpty else { throw OpenAIError.missingAPIKey }
+        
+        let url = URL(string: "\(baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": messages,
+            "temperature": temperature,
+            "response_format": ["type": "json_object"]
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (responseData, response) = try await dataWithRetry(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.networkError(URLError(.badServerResponse))
+        }
+        if !(200...299).contains(httpResponse.statusCode) {
+            if let errorJson = try? JSONDecoder().decode(APIErrorResponse.self, from: responseData) {
+                throw OpenAIError.apiError(errorJson.error.message)
+            }
+            throw OpenAIError.apiError("Status code: \(httpResponse.statusCode)")
+        }
+        
+        let result = try JSONDecoder().decode(ChatCompletionResponse.self, from: responseData)
+        return result.choices.first?.message.content ?? ""
+    }
 }
 
 // Helper structs for decoding

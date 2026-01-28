@@ -4,9 +4,14 @@ set -euo pipefail
 
 APP_NAME="Sonus"
 DIST_DIR="dist"
+BUILD_CONFIG="${1:-release}"  # По умолчанию release, но можно передать debug
 
-echo "🚀 Building Release version..."
-BIN_DIR="$(swift build -c release --show-bin-path)"
+echo "🚀 Building $BUILD_CONFIG version..."
+if [ "$BUILD_CONFIG" = "debug" ]; then
+    BIN_DIR="$(swift build --show-bin-path)"
+else
+    BIN_DIR="$(swift build -c release --show-bin-path)"
+fi
 
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"

@@ -32,6 +32,8 @@ struct MainWindow: View {
                         DashboardView()
                     case .search:
                         GlobalSearchView()
+                    case .interviewAssistant:
+                        InterviewAssistantView()
                     case .settings:
                         SettingsView()
                     case .none:

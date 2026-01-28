@@ -47,6 +47,21 @@ struct SidebarView: View {
                 onInvoke?(.search)
             }
             
+            Divider()
+                .padding(.vertical, 4)
+            
+            SidebarButton(
+                title: l10n.t("Interview Assistant", ru: "Помощник интервью"),
+                icon: "person.wave.2.fill",
+                color: .green,
+                isSelected: selection == .interviewAssistant
+            ) {
+                selection = .interviewAssistant
+                onInvoke?(.interviewAssistant)
+            }
+            
+            Spacer()
+            
             SidebarButton(
                 title: l10n.t("Settings", ru: "Настройки"),
                 icon: "gear",
@@ -56,8 +71,6 @@ struct SidebarView: View {
                 selection = .settings
                 onInvoke?(.settings)
             }
-            
-            Spacer()
         }
         .padding()
         .navigationTitle("")
@@ -115,5 +128,6 @@ enum SidebarItem: Hashable {
     case history
     case analytics
     case search
+    case interviewAssistant
     case settings
 }
