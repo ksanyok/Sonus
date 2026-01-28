@@ -77,17 +77,24 @@ final class InterviewAssistantService: ObservableObject {
             self?.processAudioChunk(chunkURL)
         }
         
-        // Запуск записи
-        audioRecorder.warmUpEngineIfPossible()
-        let filename = try audioRecorder.startRecording()
-        fullRecordingFilename = filename
-        
-        isActive = true
-        
-        // Запуск таймера для проверки пауз
-        startHintCheckTimer()
-        
-        print("✅ Interview Assistant режим активирован")
+        // Запуск записи с обработкой ошибок
+        do {
+            audioRecorder.warmUpEngineIfPossible()
+            let filename = try audioRecorder.startRecording()
+            fullRecordingFilename = filename
+            
+            isActive = true
+            
+            // Запуск таймера для проверки пауз
+            startHintCheckTimer()
+            
+            print("✅ Interview Assistant режим активирован")
+        } catch {
+            // Если произошла ошибка, очищаем состояние
+            audioRecorder.onChunkReady = nil
+            isActive = false
+            throw error
+        }
     }
     
     /// Остановить режим помощника

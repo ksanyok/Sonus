@@ -6,9 +6,11 @@ struct RecordView: View {
     @ObservedObject var recorder: AudioRecorder
     @Binding var sidebarSelection: SidebarItem?
     @EnvironmentObject private var l10n: LocalizationService
+    @StateObject private var updateService = UpdateService.shared
     @State private var isHovering = false
     @State private var pulseAnimation = false
     @State private var startingPulse = false
+    @State private var showingUpdateSheet = false
     
     var body: some View {
         ZStack {
@@ -34,6 +36,13 @@ struct RecordView: View {
                 .offset(x: 200, y: 240)
             
             VStack(spacing: 28) {
+                // Баннер обновления
+                if let update = updateService.updateAvailable {
+                    UpdateBannerCompact(update: update, showingUpdateSheet: $showingUpdateSheet)
+                        .padding(.horizontal, 4)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                
                 HStack {
                     SonusTopBar(
                         left: AnyView(
@@ -56,6 +65,15 @@ struct RecordView: View {
                         ),
                         right: AnyView(
                             HStack(spacing: 10) {
+                                // Версия приложения
+                                Text("v1.3")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.white.opacity(0.05))
+                                    .cornerRadius(6)
+                                
                                 Label(
                                     recorder.isRecording
                                         ? l10n.t("Recording", ru: "Запись")
@@ -248,28 +266,6 @@ struct RecordView: View {
                                         )
                                     }
                                     
-                                    HStack(spacing: 12) {
-                                        Button {
-                                            viewModel.startRecording()
-                                        } label: {
-                                            Label(l10n.t("Start", ru: "Старт"), systemImage: "play.fill")
-                                                .frame(maxWidth: .infinity)
-                                        }
-                                        .buttonStyle(.borderedProminent)
-                                        .tint(.blue)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        
-                                        Button {
-                                            viewModel.stopRecording()
-                                        } label: {
-                                            Label(l10n.t("Stop", ru: "Стоп"), systemImage: "stop.fill")
-                                                .frame(maxWidth: .infinity)
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .tint(.red)
-                                        .font(.system(size: 16, weight: .semibold))
-                                    }
-                                    
                                     HStack(spacing: 10) {
                                         Button {
                                             importAudio()
@@ -329,6 +325,9 @@ struct RecordView: View {
             } else {
                 startingPulse = false
             }
+        }
+        .sheet(isPresented: $showingUpdateSheet) {
+            UpdateView()
         }
     }
     

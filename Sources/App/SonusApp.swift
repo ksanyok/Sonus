@@ -86,6 +86,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         GlobalHotKeyService.shared.onHotKeyTriggered = { [weak self] in
             self?.toggleMiniWindow()
         }
+        
+        // Проверка обновлений при запуске (в фоне)
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 секунды после запуска
+            await UpdateService.shared.checkForUpdates(silent: true)
+        }
     }
 
     func configureTriggersIfPossible() {

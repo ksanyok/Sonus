@@ -49,202 +49,172 @@ struct InterviewAssistantView: View {
                 activeScreen
             }
         }
-        .frame(minWidth: 600, minHeight: 400)
-        .alert("Error", isPresented: $showError) {
-            Button("OK") { }
+        .alert("Ошибка", isPresented: $showError) {
+            Button("OK") { showError = false }
         } message: {
-            Text(error ?? "Unknown error")
+            if let error = error {
+                Text(error)
+            }
         }
     }
     
+    // MARK: - Welcome Screen
+    
     private var welcomeScreen: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 80))
-                .foregroundColor(.blue)
-            
-            Text("Помощник для англоязычного интервью")
-                .font(.title)
-                .fontWeight(.bold)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                FeatureRow(
-                    icon: "ear.fill",
-                    title: "Слушает собеседника",
-                    description: "Реал-тайм транскрибация речи на английском"
-                )
-                
-                FeatureRow(
-                    icon: "text.bubble.fill",
-                    title: "Переводит на русский",
-                    description: "Мгновенный перевод для понимания вопросов"
-                )
-                
-                FeatureRow(
-                    icon: "lightbulb.fill",
-                    title: "Подсказывает ответы",
-                    description: "Автоматические подсказки после пауз"
-                )
-                
-                FeatureRow(
-                    icon: "rectangle.on.rectangle",
-                    title: "Плавающее окно",
-                    description: "Транскрипция поверх других приложений"
-                )
-                
-                FeatureRow(
-                    icon: "doc.text.fill",
-                    title: "Полная запись",
-                    description: "Сохранение диалога для анализа"
-                )
-            }
-            .padding(.horizontal, 40)
-            
-            Toggle("Показывать плавающее окно", isOn: $showFloatingWindow)
-                .padding(.horizontal, 40)
-            
-            Toggle("Сохранить запись после завершения", isOn: $saveSessionAfterStop)
-                .padding(.horizontal, 40)
-            
-            Button(action: startAssistant) {
-                HStack {
-                    if isStarting {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .frame(width: 20, height: 20)
-                    } else {
-                        Image(systemName: "play.fill")
-               Кнопка для показа/скрытия плавающего окна
-            HStack {
-                Spacer()
-                Button(action: toggleFloatingWindow) {
-                    HStack {
-                        Image(systemName: floatingWindow == nil ? "rectangle.on.rectangle" : "rectangle.on.rectangle.slash")
-                        Text(floatingWindow == nil ? "Show Floating Window" : "Hide Floating Window")
-                    }
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(.horizontal)
-            
-            // Последний вопрос собеседника
-                    Text(isStarting ? "Запуск..." : "Начать интервью")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: 300)
-                .padding(.vertical, 12)
-            // Последний вопрос собеседника
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.blue)
-                    Text("Последняя реплика собеседника:")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                
-                ScrollView {
-                    Text(assistant.currentEnglishText.isEmpty ? "Ожидание речи..." : assistant.currentEnglishText)
-                        .font(.body)
-                        .foregroundColor(assistant.currentEnglishText.isEmpty ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .frame(height: 80)
-                .background(Color.blue.opacity(0.05))
-                .cornerRadius(8)
-            }
-            .padding(.horizontal)
-            
-            // Перевод на русский
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "text.bubble")
-                        .foregroundColor(.green)
-                    Text("Перевод:")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                
-                ScrollView {
-                    Text(assistant.currentRussianTranslation.isEmpty ? "Перевод появится здесь..." : assistant.currentRussianTranslation)
-                        .font(.body)
-                        .foregroundColor(assistant.currentRussianTranslation.isEmpty ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .frame(height: 80)
-                .background(Color.green.opacity(0.05
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                
-                ScrollView {
-                    Text(assistant.currentRussianTranslation.isEmpty ? "Перевод появится здесь..." : assistant.currentRussianTranslation)
-                        .font(.body)
-                        .foregroundColor(assistant.currentRussianTranslation.isEmpty ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .frame(height: 100)
-                .background(Color(nsColor: .textBackgroundColor))
-                .cornerRadius(8)
-            }
-            .padding(.horizontal)
-            
-            // Подсказка ответа
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "lightbulb.fill")
-                        .foregroundColor(.orange)
-                    Text("Рекомендуемый ответ:")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Spacer()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Помощник для интервью на английском")
+                        .font(.title)
+                        .fontWeight(.bold)
                     
-                    if assistant.confidenceLevel > 0 {
-                        HStack(spacing: 4) {
-                            Text("Сложность:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(complexityLabel)
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(complexityColor)
-                        }
-                    }
+                    Text("Получайте реал-тайм транскрибацию, перевод и подсказки для ответов")
+                        .font(.body)
+                        .foregroundColor(.secondary)
                 }
                 
-                ScrollView {
-                    Text(assistant.suggestedResponse.isEmpty ? "Подсказка появится после паузы..." : assistant.suggestedResponse)
-                        .font(.body)
-                        .fontWeight(assistant.suggestedResponse.isEmpty ? .regular : .medium)
-                        .foregroundColor(assistant.suggestedResponse.isEmpty ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }00)
-                .background(assistant.suggestedResponse.isEmpty ? Color(nsColor: .textBackgroundColor) : Color.orange.opacity(0.1))
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(assistant.suggestedResponse.isEmpty ? Color.clear : Color.orange.opacity(0.5), lineWidth: 2)
-                )
+                VStack(alignment: .leading, spacing: 16) {
+                    FeatureRow(
+                        icon: "waveform",
+                        title: "Транскрибация в реальном времени",
+                        description: "Автоматическое распознавание речи интервьюера на английском"
+                    )
+                    
+                    FeatureRow(
+                        icon: "character.bubble",
+                        title: "Перевод на русский",
+                        description: "Мгновенный перевод каждой реплики"
+                    )
+                    
+                    FeatureRow(
+                        icon: "lightbulb",
+                        title: "Подсказки для ответов",
+                        description: "ИИ предлагает варианты ответов после вопросов"
+                    )
+                    
+                    FeatureRow(
+                        icon: "person.2",
+                        title: "Определение говорящих",
+                        description: "Различает речь интервьюера и вашу"
+                    )
+                    
+                    FeatureRow(
+                        icon: "macwindow.on.rectangle",
+                        title: "Плавающее окно",
+                        description: "Всегда поверх других окон"
+                    )
+                }
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Показать плавающее окно", isOn: $showFloatingWindow)
+                    Toggle("Сохранить сессию после завершения", isOn: $saveSessionAfterStop)
+                }
+                
+                Button(action: startAssistant) {
+                    HStack {
+                        if isStarting {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "mic.fill")
+                        }
+                        Text(isStarting ? "Запуск..." : "Начать собеседование")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(isStarting)
             }
-            .padding(.horizontal)
+            .padding(32)
+            .frame(maxWidth: 600)
+        }
+    }
+    
+    // MARK: - Active Screen
+    
+    private var activeScreen: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Транскрипт интервьюера (последний)
+                    if let lastInterviewer = assistant.dialogueHistory.last(where: { $0.speaker == .interviewer }) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Интервьюер", systemImage: "person.circle")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            
+                            Text(lastInterviewer.englishText)
+                                .font(.title3)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(12)
+                            
+                            Text(lastInterviewer.russianTranslation)
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Ваша речь (последняя)
+                    if let lastUser = assistant.dialogueHistory.last(where: { $0.speaker == .user }) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Вы", systemImage: "person.fill")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                            
+                            Text(lastUser.englishText)
+                                .font(.body)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.green.opacity(0.1))
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Подсказка
+                    if !assistant.suggestedResponse.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Подсказка", systemImage: "lightbulb.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            
+                            Text(assistant.suggestedResponse)
+                                .font(.body)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.orange.opacity(0.1))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.orange.opacity(0.5), lineWidth: 2)
+                                )
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                .padding(.top)
+            }
+            
+            Divider()
             
             // Статистика
             HStack(spacing: 20) {
                 StatItem(icon: "bubble.left.and.bubble.right", value: "\(assistant.dialogueHistory.count)", label: "реплик")
-                StatItem(icon: "timer", value: formatDuration(Date().timeIntervalSince(assistant.dialogueHistory.first?.timestamp ?? Date())), label: "времени"        .stroke(assistant.suggestedResponse.isEmpty ? Color.clear : Color.orange.opacity(0.5), lineWidth: 2)
-                )
+                StatItem(icon: "timer", value: formatDuration(Date().timeIntervalSince(assistant.dialogueHistory.first?.timestamp ?? Date())), label: "времени")
             }
-            .padding(.horizontal)
-            
-            Spacer()
+            .padding(.vertical, 12)
             
             // Кнопка остановки
             Button(action: stopAssistant) {
@@ -261,29 +231,19 @@ struct InterviewAssistantView: View {
             .controlSize(.large)
             .padding(.bottom)
         }
-        .padding(.top)
     }
     
-    private var complexityLabel: String {
-        if assistant.confidenceLevel < 0.3 {
-            return "Простой"
-        } else if assistant.confidenceLevel < 0.7 {
-            return "Средний"
-        } else {
-            return "Сложный"
-        }
-    }
+    // MARK: - Actions
     
-    private var complexityColor: Color {
-        if assistant.confidenceLevel < 0.3 {
-            return .green
-        } else if assistant.confidenceLevel < 0.7 {
-            return .orange
-        } else {
-            return .red
-        }
-    }
-        if showFloatingWindow {
+    private func startAssistant() {
+        Task {
+            isStarting = true
+            
+            do {
+                try await assistant.start()
+                await MainActor.run {
+                    isStarting = false
+                    if showFloatingWindow {
                         openFloatingWindow()
                     }
                 }
@@ -304,7 +264,6 @@ struct InterviewAssistantView: View {
                     closeFloatingWindow()
                     
                     if saveSessionAfterStop {
-                        // Сохраняем сессию для анализа
                         saveInterviewSession(result)
                     }
                 }
@@ -313,11 +272,11 @@ struct InterviewAssistantView: View {
     }
     
     private func openFloatingWindow() {
-        if floatingWindow == nil {
-            floatingWindow = FloatingTranscriptWindowController()
-        }
-        floatingWindow?.showWindow(nil)
-        floatingWindow?.window?.makeKeyAndOrderFront(nil)
+        closeFloatingWindow()
+        
+        let controller = FloatingTranscriptWindowController()
+        controller.showWindow(self as Any?)
+        floatingWindow = controller
     }
     
     private func closeFloatingWindow() {
@@ -325,29 +284,16 @@ struct InterviewAssistantView: View {
         floatingWindow = nil
     }
     
-    private func toggleFloatingWindow() {
-        if floatingWindow?.window?.isVisible == true {
-            closeFloatingWindow()
-        } else {
-            openFloatingWindow()
-        }
-    }
-    
     private func saveInterviewSession(_ result: (filename: String, duration: TimeInterval, transcript: String)) {
-        let newSession = Session(
+        var newSession = Session(
             id: UUID(),
             date: Date(),
             duration: result.duration,
-            audioFilename: result.filename,
-            transcript: result.transcript,
-            analysis: nil,
-            analysisUpdatedAt: nil,
-            analysisSchemaVersion: nil,
-            isProcessing: false,
-            category: .meetings,
-            customTitle: "Interview - \(Date().formatted(date: .abbreviated, time: .shortened))",
-            source: .recording
+            audioFilename: result.filename
         )
+        newSession.transcript = result.transcript
+        newSession.customTitle = "Интервью на английском"
+        newSession.source = .recording
         
         PersistenceService.shared.saveSession(newSession)
         print("✅ Interview session saved: \(newSession.id)")
@@ -357,6 +303,31 @@ struct InterviewAssistantView: View {
         let minutes = Int(interval) / 60
         let seconds = Int(interval) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Supporting Views
+
+struct FeatureRow: View {
+    let icon: String
+    let title: String
+    let description: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(.accentColor)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 }
 
@@ -377,44 +348,6 @@ struct StatItem: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-        }.error = error.localizedDescription
-                    self.showError = true
-                }
-            }
         }
     }
-    
-    private func stopAssistant() {
-        assistant.stop()
-    }
-}
-
-struct FeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(.blue)
-                .frame(width: 32)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
-    }
-}
-
-#Preview {
-    InterviewAssistantView()
-        .frame(width: 600, height: 500)
 }

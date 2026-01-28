@@ -83,6 +83,12 @@ class AudioRecorder: NSObject, ObservableObject {
 
         // Make sure engine is already running (or starts now).
         if !isEngineRunning {
+            // Проверяем что inputNode доступен перед prepare
+            let inputNode = audioEngine.inputNode
+            guard inputNode.outputFormat(forBus: 0).sampleRate > 0 else {
+                throw RecordingError.audioEngineNotConfigured
+            }
+            
             audioEngine.prepare()
             try audioEngine.start()
             isEngineRunning = true
@@ -93,6 +99,12 @@ class AudioRecorder: NSObject, ObservableObject {
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        
+        // Дополнительная проверка формата
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw RecordingError.invalidAudioFormat
+        }
+        
         inputFormat = format
 
         // WAV with the device's native PCM format (usually Float32). Whisper accepts WAV.
@@ -258,5 +270,19 @@ class AudioRecorder: NSObject, ObservableObject {
         // Map roughly 0..1 to 0..1 with a mild boost
         let boosted = min(1, rms * 6)
         return max(0, boosted)
+    }
+}
+
+enum RecordingError: LocalizedError {
+    case audioEngineNotConfigured
+    case invalidAudioFormat
+    
+    var errorDescription: String? {
+        switch self {
+        case .audioEngineNotConfigured:
+            return "Audio engine is not properly configured. Please check microphone permissions."
+        case .invalidAudioFormat:
+            return "Invalid audio format detected. Please check audio device settings."
+        }
     }
 }

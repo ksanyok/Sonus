@@ -6,6 +6,7 @@ import AppKit
 struct SettingsView: View {
     @EnvironmentObject var l10n: LocalizationService
     @EnvironmentObject var viewModel: AppViewModel
+    @StateObject private var updateService = UpdateService.shared
     @State private var apiKey: String = ""
     @State private var micPermissionStatus: AVAuthorizationStatus = .notDetermined
     @State private var showSaveSuccess = false
@@ -36,6 +37,11 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 24) {
                 Text(l10n.t("Settings", ru: "Настройки"))
                     .font(.largeTitle).bold()
+
+                // Баннер обновления
+                if let update = updateService.updateAvailable {
+                    UpdateBanner(update: update)
+                }
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text(l10n.t("Language", ru: "Язык"))
@@ -238,22 +244,31 @@ struct SettingsView: View {
                             Text("Sonus")
                                 .font(.title3)
                                 .bold()
-                            Text(l10n.t("Version 1.0", ru: "Версия 1.0"))
+                            Text(l10n.t("Version 1.3", ru: "Версия 1.3"))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            Text(l10n.t("Developed by BuyReadySite.com", ru: "Разработано BuyReadySite.com"))
-                                .font(.caption)
-                                .foregroundColor(.accentColor)
-                                .onTapGesture {
-                                    if let url = URL(string: "https://buyreadysite.com") {
-                                        NSWorkspace.shared.open(url)
-                                    }
+                            
+                            Button(updateService.isCheckingForUpdates ? l10n.t("Checking…", ru: "Проверка…") : l10n.t("Check for updates", ru: "Проверить обновления")) {
+                                Task {
+                                    await updateService.checkForUpdates(silent: false)
                                 }
-                                .onHover { isHovered in
-                                    NSCursor.pointingHand.set()
-                                }
+                            }
+                            .disabled(updateService.isCheckingForUpdates)
+                            .buttonStyle(.link)
                         }
                     }
+                    
+                    Text(l10n.t("Developed by BuyReadySite.com", ru: "Разработано BuyReadySite.com"))
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                        .onTapGesture {
+                            if let url = URL(string: "https://buyreadysite.com") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .onHover { isHovered in
+                            NSCursor.pointingHand.set()
+                        }
                     
                     Text(l10n.t("Sonus is your personal AI meeting assistant. It records, transcribes, and analyzes conversations to help you be more effective.", ru: "Sonus — ваш персональный AI-ассистент для встреч. Записывает, транскрибирует и анализирует разговоры, помогая вам быть эффективнее."))
                         .font(.body)
