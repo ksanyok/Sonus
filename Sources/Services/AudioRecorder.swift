@@ -271,6 +271,44 @@ class AudioRecorder: NSObject, ObservableObject {
         let boosted = min(1, rms * 6)
         return max(0, boosted)
     }
+    
+    /// Проверка уровня звука в аудиофайле
+    /// Возвращает true если есть значимый звук, false если тишина/фон
+    func hasSignificantAudio(at url: URL, threshold: Float = 0.02) -> Bool {
+        guard let audioFile = try? AVAudioFile(forReading: url),
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                       sampleRate: audioFile.fileFormat.sampleRate,
+                                       channels: audioFile.fileFormat.channelCount,
+                                       interleaved: false),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(audioFile.length)) else {
+            return false
+        }
+        
+        do {
+            try audioFile.read(into: buffer)
+            guard let channelData = buffer.floatChannelData else { return false }
+            
+            let frameLength = Int(buffer.frameLength)
+            guard frameLength > 0 else { return false }
+            
+            let samples = channelData[0]
+            var sum: Float = 0
+            var maxSample: Float = 0
+            
+            for i in 0..<frameLength {
+                let v = abs(samples[i])
+                sum += v * v
+                maxSample = max(maxSample, v)
+            }
+            
+            let rms = sqrt(sum / Float(frameLength))
+            
+            // Проверяем и RMS, и пиковое значение
+            return rms > threshold || maxSample > (threshold * 3)
+        } catch {
+            return false
+        }
+    }
 }
 
 enum RecordingError: LocalizedError {

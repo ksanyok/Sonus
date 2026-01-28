@@ -216,14 +216,29 @@ final class RealTimeAssistantService: ObservableObject {
         chunkProcessingTask = Task { [weak self] in
             guard let self = self else { return }
             
+            // Проверка уровня звука - отсекаем тишину/фон
+            guard audioRecorder.hasSignificantAudio(at: chunkURL, threshold: 0.015) else {
+                print("⏩ Чанк пропущен: слишком тихо или только фон")
+                try? FileManager.default.removeItem(at: chunkURL)
+                return
+            }
+            
             do {
                 // 1. Транскрибация
                 let transcript = try await self.openAI.transcribe(audioURL: chunkURL)
                 
-                guard !transcript.isEmpty, !Task.isCancelled else { return }
+                // Фильтрация пустых результатов
+                let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !cleaned.isEmpty, cleaned.count > 3, !Task.isCancelled else {
+                    print("⏩ Чанк пропущен: пустой транскрипт")
+                    try? FileManager.default.removeItem(at: chunkURL)
+                    return
+                }
+                
+                print("✅ Реальная речь: \(cleaned)")
                 
                 // 2. Перевод на целевой язык
-                let translated = try await self.translateText(transcript)
+                let translated = try await self.translateText(cleaned)
                 
                 guard !Task.isCancelled else { return }
                 

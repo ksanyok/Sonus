@@ -246,15 +246,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openAIAssistant() {
-        // Открываем AI Assistant через FloatingAssistantWindow
-        let assistant = RealTimeAssistantService.shared
-        if !assistant.isActive {
-            Task {
-                try await assistant.start()
-            }
-        }
-        // Окно автоматически откроется через GlobalHotKeyService
-        NotificationCenter.default.post(name: NSNotification.Name("ActivateAIAssistant"), object: nil)
+        // Открываем окно AI Assistant
+        FloatingAssistantWindow.show()
     }
     
     @objc private func toggleRecording() {

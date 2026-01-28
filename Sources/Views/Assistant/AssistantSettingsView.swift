@@ -139,17 +139,30 @@ struct AssistantSettingsView: View {
     }
     
     private func modeButton(_ mode: RealTimeAssistantService.AssistantMode) -> some View {
-        Button {
-            assistant.assistantMode = mode
+        let isSelected = assistant.assistantMode == mode
+        let isRecommended = mode == .translation
+        
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                assistant.assistantMode = mode
+            }
         } label: {
             HStack {
                 Image(systemName: mode.icon)
                     .frame(width: 24)
+                    .foregroundColor(isSelected ? .blue : .primary)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.displayName)
-                        .font(.body)
-                        .fontWeight(.medium)
+                    HStack(spacing: 4) {
+                        Text(mode.displayName)
+                            .font(.body)
+                            .fontWeight(isSelected ? .semibold : .medium)
+                        
+                        if isRecommended {
+                            Text("⭐️")
+                                .font(.caption2)
+                        }
+                    }
                     
                     Text(modeDescription(mode))
                         .font(.caption)
@@ -158,18 +171,31 @@ struct AssistantSettingsView: View {
                 
                 Spacer()
                 
-                if assistant.assistantMode == mode {
+                if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
+                        .font(.title3)
                 }
             }
             .padding(12)
             .background(
-                assistant.assistantMode == mode ?
-                Color.blue.opacity(0.1) :
-                Color.secondary.opacity(0.05)
+                Group {
+                    if isSelected {
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.15), Color.purple.opacity(0.1)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    } else {
+                        Color.secondary.opacity(0.05)
+                    }
+                }
             )
             .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
         }
         .buttonStyle(.plain)
     }

@@ -169,41 +169,56 @@ final class InterviewAssistantService: ObservableObject {
     }
     
     private func transcribeAndTranslateChunk(_ chunkURL: URL) async {
+        // Проверка уровня звука - отсекаем тишину/фон
+        guard audioRecorder.hasSignificantAudio(at: chunkURL, threshold: 0.015) else {
+            print("⏩ Чанк пропущен: слишком тихо или только фон")
+            try? FileManager.default.removeItem(at: chunkURL)
+            return
+        }
+        
         do {
             // 1. Транскрибация аудио чанка
             let englishText = try await openAI.transcribe(audioURL: chunkURL)
             
-            guard !englishText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // Фильтрация пустых результатов
+            let cleaned = englishText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty, cleaned.count > 3 else {
+                print("⏩ Чанк пропущен: пустой транскрипт")
+                try? FileManager.default.removeItem(at: chunkURL)
                 return
             }
+            
+            print("✅ Реальная речь: \(cleaned)")
+            
+            print("✅ Реальная речь: \(cleaned)")
             
             // Обновление времени последней речи
             lastSpeechTime = Date()
             
             // 2. Определяем кто говорит (базовая эвристика)
-            let speaker: DialogueEntry.Speaker = determineSpeaker(englishText)
+            let speaker: DialogueEntry.Speaker = determineSpeaker(cleaned)
             
             // 3. Перевод на русский
-            let russianTranslation = try await translateToRussian(englishText)
+            let russianTranslation = try await translateToRussian(cleaned)
             
             // 4. Обновление UI
             await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 
                 // Проверяем что это не дубликат
-                if self.lastProcessedText == englishText {
+                if self.lastProcessedText == cleaned {
                     return
                 }
-                self.lastProcessedText = englishText
+                self.lastProcessedText = cleaned
                 
-                self.currentEnglishText = englishText
+                self.currentEnglishText = cleaned
                 self.currentRussianTranslation = russianTranslation
                 
                 // Добавляем в историю диалога
                 let entry = DialogueEntry(
                     timestamp: Date(),
                     speaker: speaker,
-                    englishText: englishText,
+                    englishText: cleaned,
                     russianTranslation: russianTranslation
                 )
                 self.dialogueHistory.append(entry)
