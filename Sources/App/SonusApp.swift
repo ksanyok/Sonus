@@ -6,15 +6,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     weak var viewModel: AppViewModel?
     weak var l10n: LocalizationService?
     private var statusItem: NSStatusItem?
-    private var hintWindowController: HintWindowController?
-    private var suggestionWindowController: RecordingSuggestionWindowController?
     private let triggerService = ContextTriggerService()
     private var notificationObservers: [NSObjectProtocol] = []
     private var didConfigureTriggers = false
     private var didStartTriggers = false
     private var statusItemBaseImage: NSImage?
-    private var statusItemBlinkTimer: Timer?
-    private var statusItemBlinkOn = false
+    private var statusUpdateTimer: Timer?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If another instance is already running, quit this one to avoid duplicates.
@@ -68,17 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        notificationObservers.append(
-            NotificationCenter.default.addObserver(
-                forName: .sonusCloseHintsPanel,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    self?.hintWindowController?.close()
-                }
-            }
-        )
+        // AI Assistant открывается через Option+Space (GlobalHotKeyService)
 
         configureTriggersIfPossible()
 
@@ -120,45 +107,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         ? "Похоже, какое‑то приложение использует микрофон. Начать запись в Sonus?"
                         : "Another app seems to be using the microphone. Start recording in Sonus?"
                 case .appBecameActive(let appName):
-                    title = (l10n.language == .ru) ? "Похоже на звонок" : "Possible call"
+                    title = (l10n.language == .ru) ? "Приложение активно" : "App became active"
                     message = (l10n.language == .ru)
-                        ? "Вы открыли \(appName). Начать запись разговора?"
-                        : "You opened \(appName). Start recording?"
+                        ? "\(appName) активировано. Начать запись?"
+                        : "\(appName) became active. Start recording?"
                 }
-
-                vm.presentRecordingSuggestion(title: title, message: message)
-
-                self.startStatusItemBlinking()
-
-                self.suggestionWindowController?.hide()
-                self.suggestionWindowController = RecordingSuggestionWindowController(
-                    statusItem: self.statusItem,
-                    titleStart: l10n.t("Start recording", ru: "Начать запись"),
-                    titleLater: l10n.t("Later", ru: "Позже"),
-                    onStart: {
-                        vm.dismissRecordingSuggestion()
-                        vm.startRecording()
-                        NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
-                        self.stopStatusItemBlinking()
-                        self.suggestionWindowController?.hide()
-                        self.suggestionWindowController = nil
-                    },
-                    onLater: {
-                        vm.dismissRecordingSuggestion()
-                        self.stopStatusItemBlinking()
-                        self.suggestionWindowController?.hide()
-                        self.suggestionWindowController = nil
-                    }
-                )
-
-                self.suggestionWindowController?.show(title: title, message: message)
-
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 12 * 1_000_000_000)
-                    self.stopStatusItemBlinking()
-                    self.suggestionWindowController?.hide()
-                    self.suggestionWindowController = nil
-                }
+                
+                // Триггеры теперь не показывают уведомления - вместо этого используется AI Assistant
+                // который вызывается через Option+Space
+                print("Trigger: \(title) - \(message)")
             }
         }
 
@@ -171,48 +128,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         didStartTriggers = true
         reloadTriggerSettings()
         triggerService.start()
-    }
-
-    func showDebugRecordingSuggestion() {
-        guard let vm = viewModel, let l10n else { return }
-        guard !vm.isRecording && !vm.isStartingRecording else { return }
-
-        let title = l10n.t("Debug prompt", ru: "Тестовое уведомление")
-        let message = l10n.t(
-            "This is an opt-in debug prompt to verify the suggestion window.",
-            ru: "Это тестовое уведомление для проверки окна рекомендации."
-        )
-
-        suggestionWindowController?.hide()
-        stopStatusItemBlinking()
-        suggestionWindowController = RecordingSuggestionWindowController(
-            statusItem: statusItem,
-            titleStart: l10n.t("Start recording", ru: "Начать запись"),
-            titleLater: l10n.t("Later", ru: "Позже"),
-            onStart: {
-                vm.dismissRecordingSuggestion()
-                vm.startRecording()
-                NotificationCenter.default.post(name: .sonusShowMiniWindow, object: nil)
-                self.stopStatusItemBlinking()
-                self.suggestionWindowController?.hide()
-                self.suggestionWindowController = nil
-            },
-            onLater: {
-                vm.dismissRecordingSuggestion()
-                self.stopStatusItemBlinking()
-                self.suggestionWindowController?.hide()
-                self.suggestionWindowController = nil
-            }
-        )
-        startStatusItemBlinking()
-        suggestionWindowController?.show(title: title, message: message)
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 4 * 1_000_000_000)
-            self.stopStatusItemBlinking()
-            self.suggestionWindowController?.hide()
-            self.suggestionWindowController = nil
-        }
     }
 
     deinit {
@@ -248,44 +163,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: t("Open Sonus", "Открыть Sonus"), action: #selector(openMainWindow), keyEquivalent: "")
         menu.addItem(withTitle: t("Toggle Recording", "Переключить запись"), action: #selector(toggleRecording), keyEquivalent: "")
-        menu.addItem(withTitle: t("Show Hints", "Показать подсказки"), action: #selector(toggleHints), keyEquivalent: "")
+        menu.addItem(withTitle: t("Open AI Assistant", "Открыть AI Ассистента"), action: #selector(openAIAssistant), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: t("Quit", "Выйти"), action: #selector(quit), keyEquivalent: "q")
         statusItem?.menu = menu
-    }
-
-    private func startStatusItemBlinking() {
-        guard let button = statusItem?.button else { return }
-        if statusItemBaseImage == nil {
-            statusItemBaseImage = button.image
-        }
-
-        stopStatusItemBlinking()
-        statusItemBlinkOn = false
-
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
-            guard let self else { return }
+        
+        // Обновляем меню каждую секунду во время записи
+        statusUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let button = self.statusItem?.button else { return }
-                self.statusItemBlinkOn.toggle()
-                if self.statusItemBlinkOn {
-                    button.image = NSImage(systemSymbolName: "waveform.circle.fill", accessibilityDescription: "Sonus")
-                } else {
-                    button.image = self.statusItemBaseImage ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
-                }
+                self?.updateStatusMenu()
             }
         }
-
-        statusItemBlinkTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
     }
 
-    private func stopStatusItemBlinking() {
-        statusItemBlinkTimer?.invalidate()
-        statusItemBlinkTimer = nil
-        statusItemBlinkOn = false
-        if let button = statusItem?.button {
-            button.image = statusItemBaseImage ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "Sonus")
+    private func updateStatusMenu() {
+        guard let vm = viewModel, let menu = statusItem?.menu else { return }
+        
+        // Обновляем первый пункт меню с информацией о записи
+        if vm.isRecording {
+            let duration = Int(vm.audioRecorder.recordingDuration)
+            let minutes = duration / 60
+            let seconds = duration % 60
+            let timeStr = String(format: "%02d:%02d", minutes, seconds)
+            
+            // Пока просто показываем время записи
+            menu.items.first?.title = "🔴 " + t("Recording", "Запись") + ": \(timeStr)"
+        } else {
+            menu.items.first?.title = t("Open Sonus", "Открыть Sonus")
         }
     }
 
@@ -341,39 +245,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         triggerService.persistSettings()
     }
 
-    func toggleHintsPanel() {
-        toggleHints()
-    }
-
-    @objc private func toggleHints() {
-        guard let viewModel else { return }
-        if hintWindowController == nil {
-            let localization = l10n ?? LocalizationService()
-            hintWindowController = HintWindowController(viewModel: viewModel, l10n: localization, statusItem: statusItem)
+    @objc private func openAIAssistant() {
+        // Открываем AI Assistant через FloatingAssistantWindow
+        let assistant = RealTimeAssistantService.shared
+        if !assistant.isActive {
+            Task {
+                try await assistant.start()
+            }
         }
-
-        hintWindowController?.toggle()
-    }
-
-    @objc private func simulateHint() {
-        guard let viewModel else { return }
-        let sampleQuestions = [
-            "Можем ли мы уложиться в 2 недели?",
-            "Сколько будет стоить поддержка?",
-            "Какие гарантии по качеству?",
-            "Есть ли кейсы в моей отрасли?"
-        ]
-        let sampleAnswers = [
-            "Оценим объём и вернём точный срок сегодня, предварительно 2-3 недели.",
-            "Поддержка считается по факту трудозатрат, можем предложить фиксированный пакет часов.",
-            "Даем гарантию на исправление дефектов в рамках договорённых требований.",
-            "Да, есть кейсы, могу выслать краткое резюме и результаты по похожим проектам."
-        ]
-        if let q = sampleQuestions.randomElement(), let a = sampleAnswers.randomElement() {
-            let engagement = Double.random(in: 0.25...0.95)
-            viewModel.showHint(question: q, answer: a, engagement: engagement)
-        }
-        hintWindowController?.show()
+        // Окно автоматически откроется через GlobalHotKeyService
+        NotificationCenter.default.post(name: NSNotification.Name("ActivateAIAssistant"), object: nil)
     }
     
     @objc private func toggleRecording() {
@@ -392,90 +273,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct SonusApp: App {
-    @StateObject var viewModel = AppViewModel()
-    @StateObject private var l10n = LocalizationService()
-    @Environment(\.openWindow) var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var viewModel = AppViewModel()
+    @StateObject private var l10n = LocalizationService()
+    
+    @Environment(\.scenePhase) var scenePhase
+
+    init() {
+        // Цветовая схема настраивается через Settings
+    }
     
     var body: some Scene {
-        WindowGroup("Sonus", id: "main") {
+        WindowGroup(id: "main") {
             MainWindow(viewModel: viewModel)
                 .environmentObject(viewModel)
                 .environmentObject(l10n)
-                .environment(\.locale, l10n.locale)
-                .onAppear {
-                    appDelegate.viewModel = viewModel
-                    appDelegate.l10n = l10n
-                    appDelegate.configureTriggersIfPossible()
-
-                    // Opt-in debug hook to validate the suggestion panel without relying on external triggers.
-                    if ProcessInfo.processInfo.environment["SONUS_DEBUG_SHOW_SUGGESTION"] == "1" {
-                        Task { @MainActor in
-                            appDelegate.showDebugRecordingSuggestion()
-                        }
-                    }
-
-                    // Opt-in debug hook to validate the hints panel open path.
-                    if ProcessInfo.processInfo.environment["SONUS_DEBUG_SHOW_HINTS"] == "1" {
-                        Task { @MainActor in
-                            appDelegate.toggleHintsPanel()
-                        }
-                    }
-                }
-        }
-        .commands {
-            CommandGroup(replacing: .appInfo) {
-                Button(l10n.t("About Sonus", ru: "О приложении Sonus")) {
-                    openWindow(id: "about")
-                }
-            }
-            
-            CommandMenu(l10n.t("Recording", ru: "Запись")) {
-                Button(l10n.t("Toggle Recording", ru: "Переключить запись")) {
-                    if viewModel.audioRecorder.isRecording {
-                        viewModel.stopRecording()
-                    } else {
-                        viewModel.startRecording()
-                    }
-                }
-                .keyboardShortcut("R", modifiers: [.command, .shift])
-                
-                Button(l10n.t("Toggle Mini Window", ru: "Мини-окно")) {
-                    openWindow(id: "mini")
-                }
-                .keyboardShortcut("M", modifiers: [.command, .shift])
-            }
-        }
-        
-        Window("Mini Recorder", id: "mini") {
-            MiniWindow(viewModel: viewModel, recorder: viewModel.audioRecorder)
-                .environmentObject(l10n)
-                .environment(\.locale, l10n.locale)
-                .onAppear {
-                    // Hack to make window always on top and transparent title bar
-                    for window in NSApplication.shared.windows {
-                        if window.title == "Mini Recorder" {
-                            window.level = .floating
-                            window.styleMask.insert(.fullSizeContentView)
-                            window.titlebarAppearsTransparent = true
-                            window.isMovableByWindowBackground = true
-                            window.standardWindowButton(.closeButton)?.isHidden = true
-                            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-                            window.standardWindowButton(.zoomButton)?.isHidden = true
-                        }
+                .frame(minWidth: 1100, minHeight: 700)
+                .onChange(of: scenePhase) { newPhase in
+                    if newPhase == .active {
+                        appDelegate.viewModel = viewModel
+                        appDelegate.l10n = l10n
+                        appDelegate.configureTriggersIfPossible()
                     }
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultSize(width: 160, height: 120)
-        .handlesExternalEvents(matching: Set(arrayLiteral: "toggle-mini"))
+        .windowToolbarStyle(.unified)
+        .commands {
+            SidebarCommands()
+            CommandGroup(replacing: .newItem) { }
+        }
         
-        Window("About Sonus", id: "about") {
-            AboutView()
+        WindowGroup(id: "mini", for: Session.ID.self) { $sessionID in
+            MiniWindow(viewModel: viewModel, recorder: viewModel.audioRecorder)
+                .environmentObject(viewModel)
                 .environmentObject(l10n)
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
-        .defaultSize(width: 600, height: 380)
+        .defaultPosition(.topTrailing)
     }
 }

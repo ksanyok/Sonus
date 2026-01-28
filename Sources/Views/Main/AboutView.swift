@@ -29,7 +29,7 @@ struct AboutView: View {
                     Text("Sonus")
                         .font(.system(size: 32, weight: .bold))
                     
-                    Text(l10n.t("Version 1.0 (Build 1)", ru: "Версия 1.0 (Сборка 1)"))
+                    Text(l10n.t("Version 1.4.3 (Build 8)", ru: "Версия 1.4.3 (Сборка 8)"))
                         .font(.body)
                         .foregroundColor(.secondary)
                 }
