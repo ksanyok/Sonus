@@ -21,10 +21,31 @@ struct DashboardView: View {
                     .bold()
                     .padding(.horizontal)
                 
-                if analyzedSessions.isEmpty {
-                    Text(l10n.t("Not enough data for analysis. Process more sessions.", ru: "Недостаточно данных для анализа. Обработайте больше сессий."))
-                        .foregroundColor(.secondary)
-                        .padding()
+                if sessions.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "chart.bar.doc.horizontal")
+                            .font(.system(size: 60))
+                            .foregroundColor(.secondary)
+                        Text(l10n.t("No sessions recorded yet", ru: "Пока нет записанных сессий"))
+                            .font(.title3)
+                        Text(l10n.t("Start recording to see analytics", ru: "Начните запись, чтобы увидеть аналитику"))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
+                } else if analyzedSessions.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 60))
+                            .foregroundColor(.secondary)
+                        Text(l10n.t("Not enough data for analysis", ru: "Недостаточно данных для анализа"))
+                            .font(.title3)
+                        Text(l10n.t("Process your sessions with AI to see insights", ru: "Обработайте сессии с помощью AI для получения аналитики"))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
                 } else {
                     // KPI Cards
                     HStack(spacing: 16) {
