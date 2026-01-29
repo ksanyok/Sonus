@@ -112,6 +112,7 @@ struct UpdateView: View {
     // MARK: - No Updates
     
     private var noUpdatesView: some View {
+        let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "-"
         VStack(spacing: 24) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
@@ -122,7 +123,7 @@ struct UpdateView: View {
                     .font(.title)
                     .fontWeight(.bold)
                 
-                Text("Sonus v1.1")
+                Text("Sonus v\(appVersion)")
                     .font(.title3)
                     .foregroundColor(.secondary)
             }

@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Security
 
 /// Сервис для проверки и установки обновлений приложения
 class UpdateService: ObservableObject {
@@ -16,7 +17,7 @@ class UpdateService: ObservableObject {
     
     // Читаем версию из Info.plist вместо хардкода
     private var currentVersion: String {
-        let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.5"
+        let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         print("📱 Версия из Bundle: \(bundleVersion)")
         return bundleVersion
     }
@@ -104,11 +105,31 @@ class UpdateService: ObservableObject {
             print("📦 Распаковка...")
             downloadProgress = 0.7
             let appURL = try await unzipUpdate(zipURL)
+            let newAppVersion = readBundleVersion(at: appURL)
+            print("   📦 Версия в архиве: \(newAppVersion ?? "unknown")")
+            if let newAppVersion = newAppVersion, !isNewerVersion(newAppVersion, than: currentVersion) {
+                throw NSError(
+                    domain: "UpdateService",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "В архиве версия \(newAppVersion), она не новее текущей (\(currentVersion))."]
+                )
+            }
             
             // 3. Заменяем приложение
             print("🔄 Установка...")
             downloadProgress = 0.9
             try await installUpdate(from: appURL)
+            updateAvailable = nil
+            errorMessage = nil
+            if let installedVersion = readInstalledVersion(),
+               let expected = newAppVersion,
+               installedVersion != expected {
+                throw NSError(
+                    domain: "UpdateService",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Обновление не применилось. Установлена версия: \(installedVersion), ожидалась: \(expected)"]
+                )
+            }
             
             downloadProgress = 1.0
             
@@ -250,52 +271,121 @@ class UpdateService: ObservableObject {
     
     private func installUpdate(from newAppURL: URL) async throws {
         let currentAppURL = Bundle.main.bundleURL
-        let backupURL = currentAppURL.deletingLastPathComponent()
-            .appendingPathComponent("Sonus-Backup.app")
+        let backupPath = currentAppURL.deletingLastPathComponent().appendingPathComponent("Sonus-Backup.app")
         
-        let fm = FileManager.default
+        print("📦 Установка обновления:")
+        print("   Источник: \(newAppURL.path)")
+        print("   Назначение: \(currentAppURL.path)")
+        print("   Бэкап: \(backupPath.path)")
         
-        // 1. Создаем бэкап текущей версии
-        try? fm.removeItem(at: backupURL)
-        try fm.copyItem(at: currentAppURL, to: backupURL)
+        // Проверяем что новое приложение существует
+        guard FileManager.default.fileExists(atPath: newAppURL.path) else {
+            throw NSError(
+                domain: "UpdateService",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Загруженное приложение не найдено"]
+            )
+        }
         
-        // 2. Удаляем текущую версию
-        try fm.removeItem(at: currentAppURL)
+        // Создаем скрипт установки
+        let scriptContent = """
+#!/bin/bash
+set -e
+rm -rf '\(backupPath.path)' 2>/dev/null || true
+cp -R '\(currentAppURL.path)' '\(backupPath.path)'
+rm -rf '\(currentAppURL.path)'
+cp -R '\(newAppURL.path)' '\(currentAppURL.path)'
+xattr -cr '\(currentAppURL.path)' 2>/dev/null || true
+codesign --force --deep --sign - '\(currentAppURL.path)' 2>/dev/null || true
+echo "SUCCESS"
+"""
         
-        // 3. Копируем новую версию
-        try fm.copyItem(at: newAppURL, to: currentAppURL)
+        let scriptPath = "/tmp/sonus_install_\(UUID().uuidString).sh"
+        try scriptContent.write(toFile: scriptPath, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)
         
-        // 4. Очищаем расширенные атрибуты и подписываем
+        defer {
+            try? FileManager.default.removeItem(atPath: scriptPath)
+        }
+        
+        print("   🔐 Запрашиваем права администратора...")
+        try await MainActor.run {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-        process.arguments = ["-cr", currentAppURL.path]
-        try? process.run()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e",
+            "do shell script \"bash '\(scriptPath)'\" with administrator privileges"
+        ]
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        try process.run()
         process.waitUntilExit()
-        
-        // Подпись
-        let codesignProcess = Process()
-        codesignProcess.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-        codesignProcess.arguments = ["--force", "--deep", "--sign", "-", currentAppURL.path]
-        try? codesignProcess.run()
-        codesignProcess.waitUntilExit()
-        
-        print("✅ Обновление установлено в \(currentAppURL.path)")
+
+        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let errorOutput = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+        print("   📝 STDOUT: '\(output)'")
+        print("   📝 STDERR: '\(errorOutput)'")
+        print("   ⚙️ Код: \(process.terminationStatus)")
+
+        if process.terminationStatus != 0 {
+            let combined = output + errorOutput
+            let errorMessage: String
+
+            if combined.contains("(-128)") || combined.contains("User canceled") {
+                errorMessage = "Установка отменена пользователем"
+            } else if combined.contains("(-60005)") || combined.contains("not allowed") {
+                errorMessage = "Требуются права администратора"
+            } else if !errorOutput.isEmpty {
+                errorMessage = "Ошибка установки: \(errorOutput)"
+            } else {
+                errorMessage = "Не удалось установить обновление (код \(process.terminationStatus))"
+            }
+
+            throw NSError(domain: "UpdateService", code: Int(process.terminationStatus),
+                         userInfo: [NSLocalizedDescriptionKey: errorMessage])
+        }
+
+        if let installedBundle = Bundle(url: currentAppURL),
+           let installedVersion = installedBundle.infoDictionary?["CFBundleShortVersionString"] as? String {
+            print("   ✅ Установленная версия: \(installedVersion)")
+        }
+        print("✅ Обновление успешно установлено")
     }
     
     private func restartApplication() {
-        let appURL = Bundle.main.bundleURL
-        let configuration = NSWorkspace.OpenConfiguration()
+        print("🔄 Перезапуск приложения...")
         
-        // Перезапускаем приложение
-        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
-            if let error = error {
-                print("❌ Ошибка перезапуска: \(error)")
-            }
+        // Путь к установленному приложению
+        let installedAppPath = "/Applications/Sonus.app"
+        
+        // Запускаем новую копию через shell, чтобы гарантировать выход из текущего процесса
+        let script = """
+        sleep 1
+        open -n "\(installedAppPath)"
+        """
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", script]
+        
+        do {
+            try process.run()
+            print("✅ Новый процесс запущен, завершаем текущий...")
+        } catch {
+            print("❌ Ошибка перезапуска: \(error)")
         }
         
-        // Завершаем текущий процесс
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            NSApp.terminate(nil)
+        // Принудительно завершаем текущий процесс
+        DispatchQueue.main.async {
+            exit(0)
         }
     }
     
@@ -333,6 +423,18 @@ class UpdateService: ObservableObject {
         notification.informativeText = "Версия \(update.version) готова к установке"
         notification.soundName = NSUserNotificationDefaultSoundName
         NSUserNotificationCenter.default.deliver(notification)
+    }
+
+    private func readInstalledVersion() -> String? {
+        let installedURL = URL(fileURLWithPath: "/Applications/Sonus.app/Contents/Info.plist")
+        guard let info = NSDictionary(contentsOf: installedURL) else { return nil }
+        return info["CFBundleShortVersionString"] as? String
+    }
+
+    private func readBundleVersion(at appURL: URL) -> String? {
+        let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
+        guard let info = NSDictionary(contentsOf: infoURL) else { return nil }
+        return info["CFBundleShortVersionString"] as? String
     }
     
     private func showNoUpdatesAlert() {

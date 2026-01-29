@@ -31,6 +31,10 @@ struct SettingsView: View {
         ? true
         : UserDefaults.standard.bool(forKey: "triggers.apps")
     @Environment(\.dismiss) var dismiss
+    private var appVersionText: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
+        return l10n.t("Version \(version)", ru: "Версия \(version)")
+    }
     
     var body: some View {
         ScrollView {
@@ -244,7 +248,7 @@ struct SettingsView: View {
                             Text("Sonus")
                                 .font(.title3)
                                 .bold()
-                            Text(l10n.t("Version 1.4.5", ru: "Версия 1.4.5"))
+                            Text(appVersionText)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             

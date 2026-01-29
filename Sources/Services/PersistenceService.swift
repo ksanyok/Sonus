@@ -27,8 +27,78 @@ class PersistenceService: ObservableObject {
     }
     
     private init() {
+        migrateFromSandboxIfNeeded()
         restoreAudioStorageAccessIfNeeded()
         loadSessions()
+    }
+
+    private func migrateFromSandboxIfNeeded() {
+        // If app was previously sandboxed, data lived in ~/Library/Containers/<bundle>/Data/Documents.
+        // After disabling sandbox, Documents path changes. Merge data if old container exists.
+        let home = fileManager.homeDirectoryForCurrentUser
+        let oldDocs = home.appendingPathComponent("Library/Containers/com.sonus.app/Data/Documents")
+        let oldSessionsURL = oldDocs.appendingPathComponent(sessionsFileName)
+        let oldBackupURL = oldDocs.appendingPathComponent("\(sessionsFileName).bak")
+
+        guard fileManager.fileExists(atPath: oldSessionsURL.path) || fileManager.fileExists(atPath: oldBackupURL.path) else { return }
+
+        let oldSessions = loadSessions(from: oldSessionsURL) ?? loadSessions(from: oldBackupURL) ?? []
+        if oldSessions.isEmpty { return }
+
+        print("🔁 Миграция данных из sandbox контейнера...")
+
+        // Ensure new Documents exists.
+        try? fileManager.createDirectory(at: documentsDirectory, withIntermediateDirectories: true)
+
+        let currentSessions = loadSessions(from: sessionsFileURL) ?? []
+        var mergedById: [UUID: Session] = [:]
+        for session in currentSessions {
+            mergedById[session.id] = session
+        }
+        var addedCount = 0
+        for session in oldSessions {
+            if mergedById[session.id] == nil {
+                mergedById[session.id] = session
+                addedCount += 1
+            }
+        }
+
+        if addedCount > 0 {
+            let merged = mergedById.values.sorted { $0.date > $1.date }
+            do {
+                let data = try JSONEncoder().encode(merged)
+                try data.write(to: sessionsFileURL)
+                print("✅ Миграция: добавлено сессий: \(addedCount)")
+            } catch {
+                print("⚠️ Ошибка сохранения миграции: \(error)")
+            }
+        }
+
+        // Copy missing audio files and chunks folder.
+        for session in oldSessions {
+            let oldAudio = oldDocs.appendingPathComponent(session.audioFilename)
+            let newAudio = documentsDirectory.appendingPathComponent(session.audioFilename)
+            if fileManager.fileExists(atPath: oldAudio.path), !fileManager.fileExists(atPath: newAudio.path) {
+                try? fileManager.copyItem(at: oldAudio, to: newAudio)
+            }
+        }
+
+        let oldChunks = oldDocs.appendingPathComponent("chunks")
+        let newChunks = documentsDirectory.appendingPathComponent("chunks")
+        if fileManager.fileExists(atPath: oldChunks.path), !fileManager.fileExists(atPath: newChunks.path) {
+            try? fileManager.copyItem(at: oldChunks, to: newChunks)
+        }
+    }
+
+    private func loadSessions(from url: URL) -> [Session]? {
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode([Session].self, from: data)
+        } catch {
+            print("Failed to load sessions from \(url.path): \(error)")
+            return nil
+        }
     }
 
     /// The directory where audio files are stored. Defaults to the app's Documents directory.

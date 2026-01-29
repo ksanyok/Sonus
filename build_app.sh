@@ -54,6 +54,10 @@ echo "APPL????" > "$CONTENTS_DIR/PkgInfo"
 echo "🧹 Stripping extended attributes..."
 xattr -cr "$APP_BUNDLE" || true
 
+echo "🧹 Removing AppleDouble files..."
+find "$APP_BUNDLE" -name "._*" -delete || true
+dot_clean -m "$APP_BUNDLE" || true
+
 echo "🔏 Signing app (ad-hoc)..."
 if [ -f "Sonus.entitlements" ]; then
     codesign --force --deep --sign - --entitlements "Sonus.entitlements" "$APP_BUNDLE"
