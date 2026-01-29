@@ -66,7 +66,7 @@ struct RecordView: View {
                         right: AnyView(
                             HStack(spacing: 10) {
                                 // Версия приложения
-                                Text("v\((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "-")")
+                                Text("v\(getAppVersion())")
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.5))
                                     .padding(.horizontal, 8)

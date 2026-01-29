@@ -15,10 +15,17 @@ class UpdateService: ObservableObject {
     // ВАЖНО: Замените на ваш GitHub репозиторий в формате "username/repo"
     private let githubRepo = "ksanyok/Sonus"
     
-    // Читаем версию из Info.plist вместо хардкода
+    // Читаем версию напрямую из файла Info.plist установленного приложения
+    // Это обходит кеширование Bundle и всегда возвращает актуальную версию
     private var currentVersion: String {
+        // Сначала пробуем прочитать из установленного приложения
+        if let installedVersion = readInstalledVersion() {
+            print("📱 Версия из /Applications: \(installedVersion)")
+            return installedVersion
+        }
+        // Fallback на Bundle (для разработки)
         let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-        print("📱 Версия из Bundle: \(bundleVersion)")
+        print("📱 Версия из Bundle (fallback): \(bundleVersion)")
         return bundleVersion
     }
     
@@ -33,6 +40,7 @@ class UpdateService: ObservableObject {
     private init() {
         print("🚀 UpdateService инициализирован")
         print("📱 Текущая версия: \(currentVersion)")
+        print("📂 Bundle path: \(Bundle.main.bundlePath)")
     }
     
     /// Проверить наличие обновлений
@@ -95,18 +103,32 @@ class UpdateService: ObservableObject {
         
         isDownloading = true
         downloadProgress = 0
+        errorMessage = nil
+        
+        print("═══════════════════════════════════════════")
+        print("🚀 НАЧАЛО ОБНОВЛЕНИЯ")
+        print("═══════════════════════════════════════════")
+        print("   📋 Версия для установки: \(updateInfo.version)")
+        print("   📋 Текущая версия: \(currentVersion)")
+        print("   📋 URL загрузки: \(updateInfo.downloadURL)")
         
         do {
             // 1. Скачиваем .zip с новой версией
-            print("📥 Скачивание обновления...")
+            print("\n[1/4] 📥 Скачивание обновления...")
             let zipURL = try await downloadUpdate(from: updateInfo.downloadURL)
+            print("   ✅ Файл скачан: \(zipURL.path)")
             
             // 2. Распаковываем
-            print("📦 Распаковка...")
-            downloadProgress = 0.7
+            print("\n[2/4] 📦 Распаковка архива...")
+            downloadProgress = 0.5
             let appURL = try await unzipUpdate(zipURL)
+            print("   ✅ Распаковано: \(appURL.path)")
+            
             let newAppVersion = readBundleVersion(at: appURL)
-            print("   📦 Версия в архиве: \(newAppVersion ?? "unknown")")
+            print("   📦 Версия в распакованном архиве: \(newAppVersion ?? "НЕ НАЙДЕНА")")
+            
+            downloadProgress = 0.7
+            
             if let newAppVersion = newAppVersion, !isNewerVersion(newAppVersion, than: currentVersion) {
                 throw NSError(
                     domain: "UpdateService",
@@ -116,12 +138,19 @@ class UpdateService: ObservableObject {
             }
             
             // 3. Заменяем приложение
-            print("🔄 Установка...")
+            print("\n[3/4] 🔄 Установка приложения...")
             downloadProgress = 0.9
             try await installUpdate(from: appURL)
+            
+            // Очищаем ошибки и флаг доступного обновления
             updateAvailable = nil
             errorMessage = nil
-            if let installedVersion = readInstalledVersion(),
+            
+            // Проверяем что обновление применилось
+            let installedVersion = readInstalledVersion()
+            print("   ✅ Версия после установки: \(installedVersion ?? "НЕ ОПРЕДЕЛЕНА")")
+            
+            if let installedVersion = installedVersion,
                let expected = newAppVersion,
                installedVersion != expected {
                 throw NSError(
@@ -134,7 +163,10 @@ class UpdateService: ObservableObject {
             downloadProgress = 1.0
             
             // 4. Перезапускаем приложение
-            print("✅ Обновление установлено, перезапуск...")
+            print("\n[4/4] 🔄 Перезапуск приложения...")
+            print("═══════════════════════════════════════════")
+            print("✅ ОБНОВЛЕНИЕ ЗАВЕРШЕНО УСПЕШНО")
+            print("═══════════════════════════════════════════")
             restartApplication()
             
         } catch {
@@ -365,26 +397,69 @@ echo "SUCCESS"
         
         // Путь к установленному приложению
         let installedAppPath = "/Applications/Sonus.app"
+        let currentPID = ProcessInfo.processInfo.processIdentifier
         
-        // Запускаем новую копию через shell, чтобы гарантировать выход из текущего процесса
-        let script = """
-        sleep 1
-        open -n "\(installedAppPath)"
-        """
+        print("   📱 Текущий PID: \(currentPID)")
+        print("   📂 Путь приложения: \(installedAppPath)")
         
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", script]
-        
-        do {
-            try process.run()
-            print("✅ Новый процесс запущен, завершаем текущий...")
-        } catch {
-            print("❌ Ошибка перезапуска: \(error)")
+        // Проверяем версию установленного приложения
+        if let installedVersion = readInstalledVersion() {
+            print("   ✅ Установленная версия: \(installedVersion)")
         }
         
-        // Принудительно завершаем текущий процесс
-        DispatchQueue.main.async {
+        // Используем надежный метод перезапуска через отдельный bash-скрипт
+        // Скрипт ждёт завершения текущего процесса и только потом запускает новый
+        let script = """
+        #!/bin/bash
+        # Ждём завершения текущего процесса (максимум 10 секунд)
+        for i in {1..100}; do
+            if ! kill -0 \(currentPID) 2>/dev/null; then
+                break
+            fi
+            sleep 0.1
+        done
+        sleep 0.3
+        # Запускаем приложение
+        open "\(installedAppPath)"
+        # Удаляем этот скрипт
+        rm -f "$0"
+        """
+        
+        let scriptPath = "/tmp/sonus_restart_\(UUID().uuidString).sh"
+        
+        do {
+            try script.write(toFile: scriptPath, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)
+            
+            // Запускаем скрипт через nohup чтобы он продолжил работать после завершения родительского процесса
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
+            process.arguments = ["/bin/bash", scriptPath]
+            process.currentDirectoryURL = URL(fileURLWithPath: "/tmp")
+            
+            // Полностью отсоединяем от текущего процесса
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.standardInput = FileHandle.nullDevice
+            
+            try process.run()
+            print("✅ Скрипт перезапуска запущен через nohup")
+            
+        } catch {
+            print("❌ Ошибка запуска скрипта: \(error)")
+            // Альтернативный метод - запуск через launchd
+            let fallbackScript = "sleep 1 && open '\(installedAppPath)'"
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/bash")
+            task.arguments = ["-c", "nohup bash -c \"\(fallbackScript)\" &"]
+            try? task.run()
+        }
+        
+        print("   Завершаем текущий процесс через exit(0)...")
+        
+        // Даём немного времени скрипту запуститься, затем принудительно завершаем
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // Используем exit(0) вместо NSApp.terminate для гарантированного завершения
             exit(0)
         }
     }
@@ -426,15 +501,27 @@ echo "SUCCESS"
     }
 
     private func readInstalledVersion() -> String? {
-        let installedURL = URL(fileURLWithPath: "/Applications/Sonus.app/Contents/Info.plist")
-        guard let info = NSDictionary(contentsOf: installedURL) else { return nil }
-        return info["CFBundleShortVersionString"] as? String
+        let plistPath = "/Applications/Sonus.app/Contents/Info.plist"
+        
+        // Читаем файл напрямую без кеширования через Data
+        guard let data = FileManager.default.contents(atPath: plistPath),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let version = plist["CFBundleShortVersionString"] as? String else {
+            return nil
+        }
+        return version
     }
 
     private func readBundleVersion(at appURL: URL) -> String? {
-        let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
-        guard let info = NSDictionary(contentsOf: infoURL) else { return nil }
-        return info["CFBundleShortVersionString"] as? String
+        let plistPath = appURL.appendingPathComponent("Contents/Info.plist").path
+        
+        // Читаем файл напрямую без кеширования
+        guard let data = FileManager.default.contents(atPath: plistPath),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let version = plist["CFBundleShortVersionString"] as? String else {
+            return nil
+        }
+        return version
     }
     
     private func showNoUpdatesAlert() {

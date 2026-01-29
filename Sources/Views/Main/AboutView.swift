@@ -29,8 +29,8 @@ struct AboutView: View {
                     Text("Sonus")
                         .font(.system(size: 32, weight: .bold))
                     
-                    let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "-"
-                    let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "-"
+                    let version = getAppVersion()
+                    let build = getAppBuild()
                     Text(l10n.t("Version \(version) (Build \(build))", ru: "Версия \(version) (Сборка \(build))"))
                         .font(.body)
                         .foregroundColor(.secondary)

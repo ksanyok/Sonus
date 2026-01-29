@@ -110,10 +110,11 @@ struct UpdateView: View {
     }
     
     // MARK: - No Updates
-    
+
     private var noUpdatesView: some View {
-        let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "-"
-        VStack(spacing: 24) {
+        // Используем глобальную функцию getAppVersion() которая читает напрямую из файла
+        let appVersion = getAppVersion()
+        return VStack(spacing: 24) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 64))
                 .foregroundColor(.green)

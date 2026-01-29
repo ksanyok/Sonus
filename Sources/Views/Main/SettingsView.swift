@@ -32,7 +32,7 @@ struct SettingsView: View {
         : UserDefaults.standard.bool(forKey: "triggers.apps")
     @Environment(\.dismiss) var dismiss
     private var appVersionText: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
+        let version = getAppVersion()
         return l10n.t("Version \(version)", ru: "Версия \(version)")
     }
     
