@@ -320,15 +320,29 @@ class UpdateService: ObservableObject {
         }
         
         // Создаем скрипт установки
+        // Используем ditto вместо cp -R для надежного копирования
         let scriptContent = """
 #!/bin/bash
 set -e
+
+# Удаляем старый бэкап если есть
 rm -rf '\(backupPath.path)' 2>/dev/null || true
-cp -R '\(currentAppURL.path)' '\(backupPath.path)'
+
+# Создаём бэкап текущего приложения
+if [ -d '\(currentAppURL.path)' ]; then
+    ditto '\(currentAppURL.path)' '\(backupPath.path)'
+fi
+
+# Удаляем текущее приложение
 rm -rf '\(currentAppURL.path)'
-cp -R '\(newAppURL.path)' '\(currentAppURL.path)'
+
+# Копируем новое приложение
+ditto '\(newAppURL.path)' '\(currentAppURL.path)'
+
+# Убираем карантин и подписываем
 xattr -cr '\(currentAppURL.path)' 2>/dev/null || true
 codesign --force --deep --sign - '\(currentAppURL.path)' 2>/dev/null || true
+
 echo "SUCCESS"
 """
         
