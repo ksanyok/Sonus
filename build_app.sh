@@ -40,6 +40,10 @@ cp "Info.plist" "$CONTENTS_DIR/"
 # Fix placeholders in Info.plist
 sed -i '' "s/\$(EXECUTABLE_NAME)/$APP_NAME/g" "$CONTENTS_DIR/Info.plist"
 sed -i '' "s/\$(PRODUCT_NAME)/$APP_NAME/g" "$CONTENTS_DIR/Info.plist"
+sed -i '' "s/\$(MACOSX_DEPLOYMENT_TARGET)/13.0/g" "$CONTENTS_DIR/Info.plist"
+
+# Create PkgInfo
+echo -n "APPL????" > "$CONTENTS_DIR/PkgInfo"
 
 # Copy Icon
 if [ -f "Sources/Resources/AppIcon.icns" ]; then
