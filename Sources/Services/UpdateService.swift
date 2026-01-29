@@ -13,7 +13,13 @@ class UpdateService: ObservableObject {
     
     // ВАЖНО: Замените на ваш GitHub репозиторий в формате "username/repo"
     private let githubRepo = "ksanyok/Sonus"
-    private let currentVersion = "1.4.5" // Автоматически из Info.plist
+    
+    // Читаем версию из Info.plist вместо хардкода
+    private var currentVersion: String {
+        let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.5"
+        print("📱 Версия из Bundle: \(bundleVersion)")
+        return bundleVersion
+    }
     
     struct UpdateInfo: Codable {
         let version: String
@@ -23,7 +29,10 @@ class UpdateService: ObservableObject {
         let isRequired: Bool // Обязательное обновление
     }
     
-    private init() {}
+    private init() {
+        print("🚀 UpdateService инициализирован")
+        print("📱 Текущая версия: \(currentVersion)")
+    }
     
     /// Проверить наличие обновлений
     @MainActor
@@ -40,12 +49,15 @@ class UpdateService: ObservableObject {
         print("🔍 Проверка обновлений...")
         print("   Текущая версия: \(currentVersion)")
         print("   GitHub репозиторий: \(githubRepo)")
+        print("   Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        print("   Bundle Path: \(Bundle.main.bundlePath)")
         
         do {
             let latestRelease = try await fetchLatestRelease()
             
             print("   Последний релиз: v\(latestRelease.version)")
-            print("   Сравнение: \(latestRelease.version) > \(currentVersion)?")
+            print("   Сравнение: '\(latestRelease.version)' > '\(currentVersion)'?")
+            print("   Результат сравнения: \(isNewerVersion(latestRelease.version, than: currentVersion))")
             
             if isNewerVersion(latestRelease.version, than: currentVersion) {
                 print("✅ ОБНОВЛЕНИЕ ДОСТУПНО: v\(latestRelease.version)")
@@ -152,7 +164,11 @@ class UpdateService: ObservableObject {
         
         print("   ✅ Получен ответ, размер: \(data.count) байт")
         
-        let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+        // Декодер с поддержкой ISO8601 дат
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        
+        let release = try decoder.decode(GitHubRelease.self, from: data)
         
         print("   Tag: \(release.tag_name)")
         print("   Assets: \(release.assets.count)")
@@ -284,18 +300,30 @@ class UpdateService: ObservableObject {
     }
     
     private func isNewerVersion(_ version: String, than currentVersion: String) -> Bool {
+        print("   🔢 Сравнение версий:")
+        print("      Новая: '\(version)'")
+        print("      Текущая: '\(currentVersion)'")
+        
         let newComponents = version.split(separator: ".").compactMap { Int($0) }
         let currentComponents = currentVersion.split(separator: ".").compactMap { Int($0) }
         
+        print("      Компоненты новой: \(newComponents)")
+        print("      Компоненты текущей: \(currentComponents)")
+        
         for (index, newValue) in newComponents.enumerated() {
             let currentValue = index < currentComponents.count ? currentComponents[index] : 0
+            print("      Сравнение [\(index)]: \(newValue) vs \(currentValue)")
+            
             if newValue > currentValue {
+                print("      ✅ Новая версия больше")
                 return true
             } else if newValue < currentValue {
+                print("      ❌ Новая версия меньше")
                 return false
             }
         }
         
+        print("      ⚖️ Версии равны")
         return false
     }
     

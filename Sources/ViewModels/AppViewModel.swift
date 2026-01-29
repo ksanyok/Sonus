@@ -537,6 +537,7 @@ final class AppViewModel: ObservableObject, @unchecked Sendable {
 
     func saveSession(_ session: Session) {
         persistence.saveSession(session)
+        NotificationCenter.default.post(name: .sonusSessionSaved, object: nil)
     }
 
     func deleteSession(_ session: Session) {

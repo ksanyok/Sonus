@@ -270,34 +270,94 @@ struct SessionEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title: String = ""
     @State private var category: SessionCategory = .personal
+    @State private var showSaveSuccess = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(l10n.t("Edit session", ru: "Редактировать запись"))
-                .font(.title2)
-                .bold()
-            TextField(l10n.t("Title", ru: "Название"), text: $title)
-                .textFieldStyle(.roundedBorder)
-            Picker(l10n.t("Category", ru: "Категория"), selection: $category) {
-                ForEach(SessionCategory.allCases) { cat in
-                    HStack {
-                        Image(systemName: cat.icon)
-                        Text(l10n.t(cat.displayNameEn, ru: cat.displayNameRu))
-                    }.tag(cat)
+        ZStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(l10n.t("Edit session", ru: "Редактировать запись"))
+                    .font(.title2)
+                    .bold()
+                TextField(l10n.t("Title", ru: "Название"), text: $title)
+                    .textFieldStyle(.roundedBorder)
+                Picker(l10n.t("Category", ru: "Категория"), selection: $category) {
+                    ForEach(SessionCategory.allCases) { cat in
+                        HStack {
+                            Image(systemName: cat.icon)
+                            Text(l10n.t(cat.displayNameEn, ru: cat.displayNameRu))
+                        }.tag(cat)
+                    }
+                }
+                .pickerStyle(.menu)
+                
+                Spacer().frame(height: 40)
+                
+                HStack {
+                    Spacer()
+                    Button(l10n.t("Cancel", ru: "Отмена")) { dismiss() }
+                        .buttonStyle(.bordered)
                 }
             }
-            .pickerStyle(.menu)
-            HStack {
+            .padding()
+            .frame(width: 360)
+            
+            // Floating Save Button
+            VStack {
                 Spacer()
-                Button(l10n.t("Save", ru: "Сохранить")) {
-                    save()
+                HStack {
+                    Spacer()
+                    Button(action: save) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(l10n.t("Save", ru: "Сохранить"))
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.blue, Color.blue.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .cornerRadius(25)
+                        .shadow(color: Color.blue.opacity(0.4), radius: 8, x: 0, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    .scaleEffect(showSaveSuccess ? 0.95 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: showSaveSuccess)
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 20)
                 }
-                .buttonStyle(.borderedProminent)
-                Button(l10n.t("Cancel", ru: "Отмена")) { dismiss() }
+            }
+            
+            // Toast Notification
+            if showSaveSuccess {
+                VStack {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green)
+                        Text(l10n.t("Saved successfully!", ru: "Успешно сохранено!"))
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 4)
+                    )
+                    .padding(.top, 20)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
             }
         }
-        .padding()
-        .frame(width: 360)
         .onAppear {
             title = session.customTitle ?? session.title
             category = session.category
@@ -312,6 +372,20 @@ struct SessionEditSheet: View {
         if viewModel.selectedSession?.id == updated.id {
             viewModel.selectedSession = updated
         }
-        dismiss()
+        
+        // Show success toast
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            showSaveSuccess = true
+        }
+        
+        // Auto dismiss after showing toast
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation {
+                showSaveSuccess = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                dismiss()
+            }
+        }
     }
 }
