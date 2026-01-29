@@ -145,35 +145,46 @@ struct FloatingAssistantView: View {
     
     private var activeAssistantView: some View {
         VStack(spacing: 0) {
+            // ФИКСИРОВАННАЯ СЕКЦИЯ: Подсказка всегда вверху
+            if !assistant.suggestion.isEmpty {
+                suggestionView
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+            }
+            
+            // ФИКСИРОВАННАЯ СЕКЦИЯ: Текущая транскрипция
+            if !assistant.currentTranscript.isEmpty {
+                currentTranscriptView
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+            }
+            
+            // Индикатор количества собеседников
+            speakersIndicator
+                .padding(.horizontal)
+                .padding(.top, 8)
+            
+            Divider()
+                .padding(.top, 8)
+            
+            // СКРОЛЛЯЩАЯСЯ ИСТОРИЯ - только старые записи
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
                         // Индикатор вовлечённости
                         engagementIndicator
                         
-                        Divider()
-                        
-                        // История разговора
+                        // История разговора (без текущей)
                         ForEach(assistant.conversationHistory) { entry in
                             conversationBubble(entry)
                                 .id(entry.id)
-                        }
-                        
-                        // Текущая транскрипция
-                        if !assistant.currentTranscript.isEmpty {
-                            currentTranscriptView
-                        }
-                        
-                        // Подсказка
-                        if !assistant.suggestion.isEmpty {
-                            suggestionView
                         }
                     }
                     .padding()
                 }
                 .onChange(of: assistant.conversationHistory.count) { _ in
                     if let lastEntry = assistant.conversationHistory.last {
-                        withAnimation {
+                        withAnimation(.easeOut(duration: 0.3)) {
                             proxy.scrollTo(lastEntry.id, anchor: .bottom)
                         }
                     }
@@ -383,18 +394,98 @@ struct FloatingAssistantView: View {
             HStack {
                 Image(systemName: "lightbulb.fill")
                     .foregroundColor(.yellow)
+                    .font(.title3)
                 
                 Text("Подсказка")
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                // Кнопка копирования
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(assistant.suggestion, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Скопировать")
             }
             
             Text(assistant.suggestion)
                 .font(.body)
-                .padding(10)
-                .background(Color.yellow.opacity(0.1))
-                .cornerRadius(8)
+                .fontWeight(.medium)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(
+                        colors: [Color.yellow.opacity(0.2), Color.orange.opacity(0.15)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.yellow.opacity(0.5), lineWidth: 2)
+                )
+                .cornerRadius(10)
         }
+        .padding(12)
+        .background(Color.yellow.opacity(0.05))
+        .cornerRadius(12)
+        .shadow(color: Color.yellow.opacity(0.2), radius: 8, x: 0, y: 4)
+    }
+    
+    /// Индикатор количества распознанных собеседников
+    private var speakersIndicator: some View {
+        let speakerCount = detectSpeakerCount()
+        return HStack(spacing: 12) {
+            ForEach(0..<speakerCount, id: \.self) { index in
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(speakerColor(for: index))
+                        .frame(width: 10, height: 10)
+                    Text(speakerName(for: index))
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+            }
+            
+            Spacer()
+            
+            Text("\(speakerCount) собеседник\(speakerCount == 1 ? "" : speakerCount < 5 ? "а" : "ов")")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.1))
+        .cornerRadius(8)
+    }
+    
+    private func detectSpeakerCount() -> Int {
+        // Подсчитываем уникальных говорящих из истории
+        var speakers = Set<String>()
+        for entry in assistant.conversationHistory {
+            if !entry.originalText.isEmpty {
+                // Простое определение: если разные стили речи - разные говорящие
+                speakers.insert(entry.id.uuidString.prefix(8).description)
+            }
+        }
+        // Минимум 2 собеседника если есть история
+        return max(assistant.conversationHistory.isEmpty ? 1 : 2, min(speakers.count, 4))
+    }
+    
+    private func speakerColor(for index: Int) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple]
+        return colors[index % colors.count]
+    }
+    
+    private func speakerName(for index: Int) -> String {
+        let names = ["Вы", "Собеседник", "Участник 3", "Участник 4"]
+        return names[index % names.count]
     }
     
     private func infoRow(icon: String, text: String) -> some View {

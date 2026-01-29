@@ -297,29 +297,26 @@ struct SettingsView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
                 
-                HStack {
-                    Spacer()
-                    Button(l10n.t("Save", ru: "Сохранить")) { saveSettings() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                }
-                
-                if showSaveSuccess {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text(l10n.t("Settings saved", ru: "Настройки сохранены"))
-                    }
-                    .padding()
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(10)
-                    .transition(.move(edge: .bottom))
-                }
+                // Отступ для плавающей кнопки
+                Spacer().frame(height: 80)
             }
             .frame(maxWidth: 720)
             .padding(24)
         }
         .frame(minWidth: 600, minHeight: 420)
+        // Плавающая кнопка сохранения
+        .overlay(alignment: .bottom) {
+            floatingSaveButton
+        }
+        // Toast уведомление
+        .overlay(alignment: .top) {
+            if showSaveSuccess {
+                SavedToastView(text: l10n.t("Settings saved", ru: "Настройки сохранены"))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 60)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showSaveSuccess)
         .onAppear {
             loadSettings()
             checkMicPermission()
@@ -334,6 +331,39 @@ struct SettingsView: View {
         }
         .onChange(of: suggestOnAppsActive) { _, _ in
             persistTriggerSettings()
+        }
+    }
+    
+    // MARK: - Floating Save Button
+    
+    private var floatingSaveButton: some View {
+        VStack {
+            Spacer()
+            
+            Button(action: saveSettings) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                    Text(l10n.t("Save Settings", ru: "Сохранить настройки"))
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 14)
+                .background(
+                    LinearGradient(
+                        colors: [.blue, .purple],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(25)
+                .shadow(color: Color.blue.opacity(0.4), radius: 12, x: 0, y: 6)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.defaultAction)
+            .padding(.bottom, 20)
         }
     }
     
@@ -529,5 +559,30 @@ struct SettingsView: View {
         case Int(kVK_ANSI_Z): return "Z"
         default: return "Space"
         }
+    }
+}
+
+// MARK: - Saved Toast View
+
+private struct SavedToastView: View {
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title2)
+                .foregroundColor(.green)
+            
+            Text(text)
+                .font(.headline)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(.ultraThinMaterial)
+        .background(Color.green.opacity(0.15))
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
+        .padding(.top, 20)
     }
 }

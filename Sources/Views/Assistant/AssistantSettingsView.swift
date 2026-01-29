@@ -143,41 +143,62 @@ struct AssistantSettingsView: View {
         let isRecommended = mode == .translation
         
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 assistant.assistantMode = mode
             }
         } label: {
             HStack {
-                Image(systemName: mode.icon)
-                    .frame(width: 24)
-                    .foregroundColor(isSelected ? .blue : .primary)
+                // Иконка с анимированным индикатором выбора
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? 
+                              LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                              LinearGradient(colors: [Color.secondary.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(isSelected ? .white : .primary)
+                }
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Text(mode.displayName)
                             .font(.body)
-                            .fontWeight(isSelected ? .semibold : .medium)
+                            .fontWeight(isSelected ? .bold : .medium)
+                            .foregroundColor(isSelected ? .primary : .secondary)
                         
                         if isRecommended {
-                            Text("⭐️")
+                            Text("⭐️ Рекомендуем")
                                 .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.15))
+                                .cornerRadius(4)
                         }
                     }
                     
                     Text(modeDescription(mode))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .lineLimit(2)
                 }
                 
                 Spacer()
                 
+                // Большой чекмарк для выбранного
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.title3)
+                        .foregroundStyle(
+                            LinearGradient(colors: [.green, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .font(.title2)
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(12)
+            .padding(14)
             .background(
                 Group {
                     if isSelected {
@@ -191,11 +212,18 @@ struct AssistantSettingsView: View {
                     }
                 }
             )
-            .cornerRadius(10)
+            .cornerRadius(12)
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color.clear, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSelected ? 
+                        LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing) :
+                        LinearGradient(colors: [Color.clear], startPoint: .leading, endPoint: .trailing),
+                        lineWidth: isSelected ? 2.5 : 0
+                    )
             )
+            .shadow(color: isSelected ? Color.blue.opacity(0.2) : .clear, radius: 8, x: 0, y: 4)
+            .scaleEffect(isSelected ? 1.02 : 1.0)
         }
         .buttonStyle(.plain)
     }
